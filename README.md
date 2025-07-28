@@ -1,5 +1,7 @@
 # Pool Party
 
+A simple, dynamic website with defined purpose funding pools where users can make donations, choosing how to allocate across the pools, and see the transparent progress of each funding pool.
+
 ## Developer stuff
 
 ### Google Cloud Auth
