@@ -13,7 +13,7 @@ const initialOptions = {
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <GoogleOAuthProvider clientId="138692855602-23a3hc723lcb65qgm08ih48l01vkmuij.apps.googleusercontent.com">
+    <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
       <PayPalScriptProvider options={initialOptions}>
         <App />
       </PayPalScriptProvider>
