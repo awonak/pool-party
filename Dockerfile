@@ -12,7 +12,7 @@ WORKDIR /app/frontend
 # Copy package.json and package-lock.json to leverage Docker cache
 COPY frontend/package.json frontend/package-lock.json ./
 # Use 'npm ci' for faster, more reliable builds in CI/CD environments
-# RUN npm ci
+RUN npm ci
 
 # Copy the rest of the frontend source code
 COPY frontend/ ./
