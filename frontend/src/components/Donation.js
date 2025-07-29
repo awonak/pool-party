@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PayPalButtons, usePayPalScriptReducer } from '@paypal/react-paypal-js';
+import { PayPalButtons, usePayPalScriptReducer, FUNDING } from '@paypal/react-paypal-js';
 
 // Material-UI Imports
 import {
@@ -68,6 +68,9 @@ function Donation() {
       purchase_units: [{
         amount: { value: totalDonation.toFixed(2) },
       }],
+      application_context: {
+        shipping_preference: 'NO_SHIPPING',
+      },
     });
   };
 
@@ -173,6 +176,7 @@ function Donation() {
                 </Box>
               ) : (
                 <PayPalButtons
+                  disabledFunding={[FUNDING.PAYLATER]}
                   createOrder={createOrder}
                   onApprove={onApprove}
                   onError={(err) => setError(err.message)}
