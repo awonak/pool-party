@@ -1,65 +1,77 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PayPalButtons, usePayPalScriptReducer } from '@paypal/react-paypal-js';
-import styles from './Donation.module.css';
+
+// Material-UI Imports
+import {
+  Container,
+  Paper,
+  Box,
+  Typography,
+  TextField,
+  InputAdornment,
+  Checkbox,
+  FormControlLabel,
+  Divider,
+  CircularProgress,
+  Alert,
+} from '@mui/material';
 
 function Donation() {
   const navigate = useNavigate();
-  const [fundingPools, setFundingPools] = useState([]);
-  const [pageLoading, setPageLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [{ isPending }] = usePayPalScriptReducer();
-
-  // State to store donation amounts for each pool
+  
+  // Component State
+  const [fundingPools, setFundingPools] = useState([]);
   const [donationAmounts, setDonationAmounts] = useState({});
   const [description, setDescription] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
+  
+  // Status State
+  const [pageLoading, setPageLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
+    setPageLoading(true);
     fetch('/api/funding-pools')
       .then(response => {
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
+        if (!response.ok) throw new Error('Network response was not ok');
         return response.json();
       })
       .then(data => {
         setFundingPools(data || []);
-        setPageLoading(false);
       })
-      .catch(error => {
-        setError(error.message);
+      .catch(err => {
+        setError(err.message);
+      })
+      .finally(() => {
         setPageLoading(false);
       });
   }, []);
 
-  // Function to handle changes in donation input fields
   const handleDonationChange = (poolId, amount) => {
-    setDonationAmounts({ ...donationAmounts, [poolId]: amount });
+    // Allow empty string to clear the input, otherwise parse as float
+    const numericAmount = amount === '' ? '' : parseFloat(amount);
+    if (isNaN(numericAmount) && numericAmount !== '') return;
+    setDonationAmounts({ ...donationAmounts, [poolId]: numericAmount });
   };
 
-  // Calculate the total donation amount
   const totalDonation = Object.values(donationAmounts).reduce((sum, amount) => sum + (Number(amount) || 0), 0);
 
   const createOrder = (data, actions) => {
-    // Basic validation before creating an order
     if (totalDonation <= 0) {
-      setError("Please enter a donation amount.");
-      return;
+      setError("Please enter a donation amount greater than $0.00.");
+      return Promise.reject(new Error("Invalid amount"));
     }
     setError(null); // Clear previous errors
     return actions.order.create({
       purchase_units: [{
-        amount: {
-          value: totalDonation.toFixed(2),
-        },
+        amount: { value: totalDonation.toFixed(2) },
       }],
     });
   };
 
   const onApprove = (data, actions) => {
-    // This function is called when the user approves the payment on PayPal.
-    // We now need to send the orderID and our allocation data to our backend for verification.
     const allocations = Object.entries(donationAmounts)
       .filter(([, amount]) => Number(amount) > 0)
       .map(([poolId, amount]) => ({ funding_pool_id: parseInt(poolId, 10), amount: parseFloat(amount) }));
@@ -76,82 +88,104 @@ function Donation() {
         return res.json();
     })
     .then(details => {
-      const donorName = details.payer && details.payer.name ? details.payer.name.given_name : 'friend';
+      const donorName = details.payer?.name?.given_name || 'friend';
       navigate('/ledger', { state: { successMessage: `Thank you for your donation, ${donorName}!` } });
     })
     .catch(err => {
-        // Display error from our backend to the user
-        setError(err.message);
+      setError(err.message);
     });
   };
 
   if (pageLoading) {
-    return <div>Loading donation options...</div>;
-  }
-
-  if (error) {
-    // Still render the donation form even if there's an error from a previous action
-    // but show the error message. A full-page error is only for initial load failure.
-    if (pageLoading) return <div>Error: {error}</div>;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Loading donation options...</Typography>
+      </Box>
+    );
   }
 
   return (
-    <div>
-      <h2>Make a Donation</h2>
-      <p>Choose how to allocate your donation across the funding pools.</p>
-      {error && <p className={styles.errorText}>{error}</p>}
-      {fundingPools.length > 0 ? (
-        <>
-          {fundingPools.map(pool => (
-            <div key={pool.id} className={styles.poolInputContainer}>
-              <label htmlFor={`donation-${pool.id}`}>{pool.name}:</label>
-              <input
-                type="number"
-                min="0"
-                step="0.01"
-                id={`donation-${pool.id}`}
-                value={donationAmounts[pool.id] || ''}
-                onChange={(e) => handleDonationChange(pool.id, e.target.value)}
-                placeholder="$0.00"
-              />
-            </div>
-          ))}
-          <hr className={styles.divider} />
-          <div className={styles.anonymousContainer}>
-            <input
-              type="checkbox"
-              id="anonymous-donation"
-              checked={isAnonymous}
-              onChange={(e) => setIsAnonymous(e.target.checked)}
-            />
-            <label htmlFor="anonymous-donation" className={styles.anonymousLabel}>
-              Make my donation anonymous
-            </label>
-            <p className={styles.anonymousHelpText}>
-              If checked, your name will not appear on the public ledger.
-            </p>
-          </div>
-          <div className={styles.descriptionContainer}>
-            <label htmlFor="donation-description">Add a note (optional):</label>
-            <br />
-            <textarea
-              id="donation-description"
+    <Container maxWidth="sm" sx={{ py: 4 }}>
+      <Paper elevation={3} sx={{ p: { xs: 2, md: 4 } }}>
+        <Typography variant="h4" component="h1" gutterBottom>
+          Make a Donation
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          Choose how to allocate your donation across the funding pools.
+        </Typography>
+
+        {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+
+        {fundingPools.length > 0 ? (
+          <Box component="form" noValidate autoComplete="off">
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+              {fundingPools.map(pool => (
+                <TextField
+                  key={pool.id}
+                  label={pool.name}
+                  type="number"
+                  value={donationAmounts[pool.id] || ''}
+                  onChange={(e) => handleDonationChange(pool.id, e.target.value)}
+                  placeholder="0.00"
+                  InputProps={{
+                    startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                  }}
+                  inputProps={{ min: 0, step: "0.01" }}
+                />
+              ))}
+            </Box>
+
+            <Divider sx={{ my: 3 }} />
+
+            <TextField
+              fullWidth
+              label="Add a note (optional)"
+              multiline
+              rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="How would you like your donation to be used?"
-              rows="3"
-              className={styles.descriptionTextarea}
+              sx={{ mb: 2 }}
             />
-          </div>
-          <h3 className={styles.totalDonation}>Total Donation: ${totalDonation.toFixed(2)}</h3>
-          <div className={styles.paypalContainer}>
-            {isPending ? <div>Loading PayPal...</div> : <PayPalButtons createOrder={createOrder} onApprove={onApprove} />}
-          </div>
-        </>
-      ) : (
-        <p>No funding pools are available for donation at this time.</p>
-      )}
-    </div>
+            
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={isAnonymous}
+                  onChange={(e) => setIsAnonymous(e.target.checked)}
+                />
+              }
+              label="Make my donation anonymous"
+            />
+            <Typography variant="caption" display="block" color="text.secondary" sx={{ mt: -1, mb: 3, ml: 4 }}>
+                If checked, your name will not appear on the public ledger.
+            </Typography>
+
+            <Typography variant="h5" component="p" align="right" sx={{ fontWeight: 'bold' }}>
+              {`Total: $${totalDonation.toFixed(2)}`}
+            </Typography>
+
+            <Box sx={{ mt: 2, minHeight: '50px' }}>
+              {isPending ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                  <CircularProgress />
+                </Box>
+              ) : (
+                <PayPalButtons
+                  createOrder={createOrder}
+                  onApprove={onApprove}
+                  onError={(err) => setError(err.message)}
+                  forceReRender={[totalDonation, description, isAnonymous]} // Re-render buttons if these values change
+                />
+              )}
+            </Box>
+          </Box>
+        ) : (
+          <Alert severity="info">No funding pools are available for donation at this time.</Alert>
+        )}
+      </Paper>
+    </Container>
   );
 }
 

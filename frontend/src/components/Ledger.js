@@ -1,6 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import styles from './Ledger.module.css';
+
+// Material-UI Imports
+import {
+  Container,
+  Paper,
+  Box,
+  Typography,
+  CircularProgress,
+  Alert,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Divider,
+  Chip,
+} from '@mui/material';
 
 function Ledger() {
   const [transactions, setTransactions] = useState([]);
@@ -13,45 +34,31 @@ function Ledger() {
   const successMessage = location.state?.successMessage;
 
   useEffect(() => {
+    setLoading(true);
     fetch('/api/ledger')
       .then(response => {
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
+        if (!response.ok) throw new Error('Network response was not ok');
         return response.json();
       })
       .then(data => {
         setTransactions(data.transactions || []);
         setTotalDonations(data.total_donations || 0);
         setTotalWithdrawals(data.total_withdrawals || 0);
-        setLoading(false);
       })
-      .catch(error => {
-        setError(error.message);
+      .catch(err => {
+        setError(err.message);
+      })
+      .finally(() => {
         setLoading(false);
       });
   }, []);
-
+  
   const formatUser = (transaction) => {
-    if (transaction.anonymous) {
-      return 'Anonymous';
-    }
-    if (transaction.first_name && transaction.last_initial) {
-      return `${transaction.first_name} ${transaction.last_initial}.`;
-    }
-    if (transaction.first_name) {
-      return transaction.first_name;
-    }
-    return 'User'; // Fallback for older data or system transactions
+    if (transaction.anonymous) return 'Anonymous';
+    if (transaction.first_name && transaction.last_initial) return `${transaction.first_name} ${transaction.last_initial}.`;
+    if (transaction.first_name) return transaction.first_name;
+    return 'User';
   };
-
-  if (loading) {
-    return <div>Loading ledger...</div>;
-  }
-
-  if (error) {
-    return <div>Error: {error}</div>;
-  }
 
   const filteredTransactions = transactions.filter(tx => {
     if (filter === 'all') return true;
@@ -59,72 +66,117 @@ function Ledger() {
   });
 
   const netBalance = totalDonations - totalWithdrawals;
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Loading ledger...</Typography>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Container maxWidth="md" sx={{ py: 4 }}>
+        <Alert severity="error">Error: {error}</Alert>
+      </Container>
+    );
+  }
+
   return (
-    <div>
-      <h2>Ledger Page</h2>
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Typography variant="h4" component="h1" gutterBottom>
+        Ledger
+      </Typography>
+
       {successMessage && (
-        <p className={styles.successMessage}>{successMessage}</p>
+        <Alert severity="success" sx={{ mb: 4 }}>
+          {successMessage}
+        </Alert>
       )}
-      <div className={styles.summaryBox}>
-        <h3>Account Summary</h3>
-        <p className={styles.summaryRow}>
-          <strong>Total Donations Received:</strong>
-          <span className={styles.totalDonations}>
+
+      {/* Account Summary */}
+      <Paper elevation={3} sx={{ p: 3, mb: 4 }}>
+        <Typography variant="h5" component="h2" gutterBottom>
+          Account Summary
+        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', my: 1 }}>
+          <Typography>Total Donations Received:</Typography>
+          <Typography sx={{ fontWeight: 'bold', color: 'success.main' }}>
             ${totalDonations.toFixed(2)}
-          </span>
-        </p>
-        <p className={styles.summaryRow}>
-          <strong>Total Withdrawals:</strong>
-          <span className={styles.totalWithdrawals}>
+          </Typography>
+        </Box>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', my: 1 }}>
+          <Typography>Total Withdrawals:</Typography>
+          <Typography sx={{ fontWeight: 'bold', color: 'warning.main' }}>
             ${totalWithdrawals.toFixed(2)}
-          </span>
-        </p>
-        <hr className={styles.summaryDivider} />
-        <p className={styles.netBalance}>
-          <strong>Net Balance:</strong>
-          <span className={`${styles.netBalanceValue} ${netBalance >= 0 ? styles.positiveBalance : styles.negativeBalance}`}>
+          </Typography>
+        </Box>
+        <Divider sx={{ my: 2 }} />
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+          <Typography variant="h6">Net Balance:</Typography>
+          <Typography variant="h6" sx={{ color: netBalance >= 0 ? 'success.main' : 'warning.main' }}>
             ${netBalance.toFixed(2)}
-          </span>
-        </p>
-      </div>
-      <h3>Transaction History</h3>
-      <div className={styles.filterContainer}>
-        <label htmlFor="filter-type">Filter by type: </label>
-        <select
-          id="filter-type"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        >
-          <option value="all">All</option>
-          <option value="deposit">Deposits</option>
-          <option value="withdrawal">Withdrawals</option>
-        </select>
-      </div>
-      <table className={styles.transactionTable}>
-        <thead>
-          <tr className={styles.tableHeader}>
-            <th className={styles.tableHeaderCell}>Date</th>
-            <th className={styles.tableHeaderCell}>User</th>
-            <th className={styles.tableHeaderCell}>Type</th>
-            <th className={styles.tableHeaderCellRight}>Amount</th>
-            <th className={styles.tableHeaderCell}>Description</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filteredTransactions.map(tx => (
-            <tr key={tx.id} className={styles.tableRow}>
-              <td className={styles.tableCell}>{new Date(tx.timestamp).toLocaleString()}</td>
-              <td className={styles.tableCell}>{formatUser(tx)}</td>
-              <td className={`${styles.tableCell} ${styles.transactionType}`}>{tx.transaction_type}</td>
-              <td className={`${styles.tableCellRight} ${tx.transaction_type === 'deposit' ? styles.depositAmount : styles.withdrawalAmount}`}>
-                ${tx.amount.toFixed(2)}
-              </td>
-              <td className={styles.tableCell}>{tx.description}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </Typography>
+        </Box>
+      </Paper>
+
+      {/* Transaction History */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h5" component="h2">
+          Transaction History
+        </Typography>
+        <FormControl variant="outlined" sx={{ minWidth: 150 }}>
+          <InputLabel id="filter-type-label">Filter by type</InputLabel>
+          <Select
+            labelId="filter-type-label"
+            id="filter-type"
+            value={filter}
+            label="Filter by type"
+            onChange={(e) => setFilter(e.target.value)}
+          >
+            <MenuItem value="all">All</MenuItem>
+            <MenuItem value="deposit">Deposits</MenuItem>
+            <MenuItem value="withdrawal">Withdrawals</MenuItem>
+          </Select>
+        </FormControl>
+      </Box>
+
+      <TableContainer component={Paper}>
+        <Table aria-label="transaction ledger">
+          <TableHead>
+            <TableRow sx={{ '& .MuiTableCell-head': { fontWeight: 'bold' } }}>
+              <TableCell>Date</TableCell>
+              <TableCell>User</TableCell>
+              <TableCell>Type</TableCell>
+              <TableCell align="right">Amount</TableCell>
+              <TableCell>Description</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {filteredTransactions.map((tx) => (
+              <TableRow key={tx.id} hover sx={{ '&:last-child td, &:last-child th': { border: 0 } }}>
+                <TableCell>{new Date(tx.timestamp).toLocaleString()}</TableCell>
+                <TableCell>{formatUser(tx)}</TableCell>
+                <TableCell>
+                  <Chip
+                    label={tx.transaction_type}
+                    color={tx.transaction_type === 'deposit' ? 'success' : 'warning'}
+                    size="small"
+                    variant="outlined"
+                  />
+                </TableCell>
+                <TableCell align="right" sx={{ color: tx.transaction_type === 'deposit' ? 'success' : 'warning' }}>
+                  ${tx.amount.toFixed(2)}
+                </TableCell>
+                <TableCell>{tx.description}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Container>
   );
 }
 

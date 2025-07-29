@@ -1,5 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Link } from 'react-router-dom';
+import {
+  AppBar,
+  Toolbar,
+  Typography,
+  Button,
+  Container,
+  Box,
+  CssBaseline,
+} from '@mui/material';
 import './App.css';
 import Home from './components/Home';
 import Donation from './components/Donation';
@@ -37,28 +46,35 @@ function App() {
 
     return (
     <Router>
-      <div className="App">
-        <nav>
-          <ul>
-            <li><Link to="/">Home</Link></li>
-            <li><Link to="/donation">Donation</Link></li>
-            <li><Link to="/ledger">Ledger</Link></li>
-            {user && user.is_moderator && (<>
-              <li><Link to="/funding-pool-manager">Manage Pools</Link></li>
-              <li><Link to="/withdrawal">Make Withdrawal</Link></li>
-              </>
-            )}
-          </ul>
-        </nav>
-        <Routes>
-          <Route path="/" element={<Home user={user} setUser={setUser} onLogout={handleLogout} />} />
-          <Route path="/donation" element={<Donation />} />
-          <Route path="/ledger" element={<Ledger />} />
-          <Route path="/funding-pool-manager" element={<FundingPoolManager />} />
-          <Route path="/funding-pool-manager/:id" element={<FundingPoolManager />} />
-          <Route path="/withdrawal" element={<Withdrawal />} />
-        </Routes>
-      </div>
+      <CssBaseline />
+      <AppBar position="static">
+        <Toolbar>
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+            Pool Party
+          </Typography>
+          <Button color="inherit" component={Link} to="/">Home</Button>
+          <Button color="inherit" component={Link} to="/donation">Donation</Button>
+          <Button color="inherit" component={Link} to="/ledger">Ledger</Button>
+          {user && user.is_moderator && (
+            <>
+              <Button color="inherit" component={Link} to="/funding-pool-manager">Manage Pools</Button>
+              <Button color="inherit" component={Link} to="/withdrawal">Make Withdrawal</Button>
+            </>
+          )}
+        </Toolbar>
+      </AppBar>
+      <Container component="main" sx={{ mt: 4, mb: 4 }}>
+        <Box>
+          <Routes>
+            <Route path="/" element={<Home user={user} setUser={setUser} onLogout={handleLogout} />} />
+            <Route path="/donation" element={<Donation />} />
+            <Route path="/ledger" element={<Ledger />} />
+            <Route path="/funding-pool-manager" element={<FundingPoolManager />} />
+            <Route path="/funding-pool-manager/:id" element={<FundingPoolManager />} />
+            <Route path="/withdrawal" element={<Withdrawal />} />
+          </Routes>
+        </Box>
+      </Container>
     </Router>
   );
 }

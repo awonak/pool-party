@@ -1,27 +1,41 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import styles from "./FundingPoolManager.module.css";
+
+// Material-UI Imports
+import {
+  Container,
+  Paper,
+  Box,
+  Typography,
+  TextField,
+  InputAdornment,
+  CircularProgress,
+  Alert,
+} from "@mui/material";
+import { LoadingButton } from "@mui/lab"; // For a button with a loading state
 
 function FundingPoolManager() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEditMode = Boolean(id);
 
+  // Form State
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [goalAmount, setGoalAmount] = useState("");
+
+  // Status State
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState("");
-  const [initialLoading, setInitialLoading] = useState(isEditMode); // For fetching data in edit mode
+  const [initialLoading, setInitialLoading] = useState(isEditMode);
 
   useEffect(() => {
     if (isEditMode) {
+      setInitialLoading(true);
       fetch(`/api/funding-pools/${id}`)
         .then((response) => {
-          if (!response.ok) {
-            throw new Error("Failed to fetch funding pool data.");
-          }
+          if (!response.ok) throw new Error("Failed to fetch funding pool data.");
           return response.json();
         })
         .then((data) => {
@@ -29,12 +43,8 @@ function FundingPoolManager() {
           setDescription(data.description || "");
           setGoalAmount(data.goal_amount.toString());
         })
-        .catch((err) => {
-          setError(err.message);
-        })
-        .finally(() => {
-          setInitialLoading(false);
-        });
+        .catch((err) => setError(err.message))
+        .finally(() => setInitialLoading(false));
     }
   }, [id, isEditMode]);
 
@@ -45,38 +55,32 @@ function FundingPoolManager() {
     setSuccessMessage("");
 
     const poolData = {
-      name: name,
-      description: description,
-      goal_amount: parseFloat(goalAmount), // Match Go backend struct tag
+      name,
+      description,
+      goal_amount: parseFloat(goalAmount),
     };
 
     const endpoint = isEditMode ? `/api/funding-pools/${id}` : "/api/funding-pools";
+    const method = isEditMode ? "PUT" : "POST";
 
     try {
       const response = await fetch(endpoint, {
-        method: isEditMode ? "PUT" : "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        method,
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(poolData),
       });
 
       if (!response.ok) {
         const errData = await response.json();
-        throw new Error(
-          errData.error ||
-            `Failed to ${isEditMode ? "update" : "create"} funding pool.`
-        );
+        throw new Error(errData.error || `Failed to ${isEditMode ? "update" : "create"} pool.`);
       }
 
       const resultPool = await response.json();
+      setSuccessMessage(`Successfully ${isEditMode ? "updated" : "created"} pool: ${resultPool.name}`);
+      
       if (isEditMode) {
-        setSuccessMessage(`Successfully updated pool: ${resultPool.name}`);
-        // Optional: redirect back to the home page after a successful update
         setTimeout(() => navigate("/"), 2000);
       } else {
-        setSuccessMessage(`Successfully created pool: ${resultPool.name}`);
-        // Reset the form only on successful creation
         setName("");
         setDescription("");
         setGoalAmount("");
@@ -89,67 +93,75 @@ function FundingPoolManager() {
   };
 
   if (initialLoading) {
-    return <div>Loading pool data...</div>;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Loading pool data...</Typography>
+      </Box>
+    );
   }
 
   return (
-    <div className={styles.formContainer}>
-      <h2>{isEditMode ? "Edit Funding Pool" : "Funding Pool Manager"}</h2>
-      <p>
-        {isEditMode
-          ? "Modify the details of the funding pool."
-          : "Add a new funding pool here."}
-      </p>
-      <form onSubmit={handleSubmit}>
-        <h3>{isEditMode ? `Editing: ${name}` : "Add New Funding Pool"}</h3>
+    <Container maxWidth="sm" sx={{ py: 4 }}>
+      <Paper elevation={3} sx={{ p: { xs: 2, md: 4 } }}>
+        <Typography variant="h4" component="h1" gutterBottom>
+          {isEditMode ? "Edit Funding Pool" : "Create Funding Pool"}
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+          {isEditMode
+            ? `Use this form to modify the details of "${name}".`
+            : "Use this form to add a new funding pool to the system."}
+        </Typography>
 
-        {error && <p className={styles.errorText}>{error}</p>}
-        {successMessage && <p className={styles.successMessage}>{successMessage}</p>}
+        <Box component="form" onSubmit={handleSubmit} noValidate>
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {successMessage && <Alert severity="success" sx={{ mb: 2 }}>{successMessage}</Alert>}
 
-        <div className={styles.formGroup}>
-          <label htmlFor="name">Pool Name</label>
-          <input
-            type="text"
-            id="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            placeholder="e.g., Kegerator A"
-          />
-        </div>
-        <div className={styles.formGroup}>
-          <label htmlFor="description">Description (Optional)</label>
-          <textarea
-            id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="e.g., For funding the main office kegerator"
-          />
-        </div>
-        <div className={styles.formGroup}>
-          <label htmlFor="goalAmount">Goal Amount</label>
-          <input
-            type="number"
-            id="goalAmount"
-            value={goalAmount}
-            onChange={(e) => setGoalAmount(e.target.value)}
-            required
-            min="0"
-            step="0.01"
-            placeholder="e.g., 150.00"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={loading || initialLoading}
-          className={styles.submitButton}
-        >
-          {loading
-            ? isEditMode ? "Updating..." : "Creating..."
-            : isEditMode ? "Update Pool" : "Create Pool"}
-        </button>
-      </form>
-    </div>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <TextField
+              label="Pool Name"
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              fullWidth
+              autoFocus
+            />
+            <TextField
+              label="Description (Optional)"
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              multiline
+              rows={4}
+              fullWidth
+            />
+            <TextField
+              label="Goal Amount"
+              id="goalAmount"
+              type="number"
+              value={goalAmount}
+              onChange={(e) => setGoalAmount(e.target.value)}
+              required
+              fullWidth
+              InputProps={{
+                startAdornment: <InputAdornment position="start">$</InputAdornment>,
+              }}
+              inputProps={{ min: 0, step: "0.01" }}
+            />
+          </Box>
+          <LoadingButton
+            type="submit"
+            fullWidth
+            variant="contained"
+            loading={loading}
+            sx={{ mt: 3, py: 1.5 }}
+          >
+            {isEditMode ? "Update Pool" : "Create Pool"}
+          </LoadingButton>
+        </Box>
+      </Paper>
+    </Container>
   );
 }
 

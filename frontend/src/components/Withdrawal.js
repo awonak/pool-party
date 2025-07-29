@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import styles from './Withdrawal.module.css';
+import {
+  Box,
+  Typography,
+  TextField,
+  Button,
+  CircularProgress,
+  Alert,
+  List,
+  ListItem,
+  ListItemText,
+  Divider,
+} from '@mui/material';
 
 function Withdrawal() {
   const [fundingPools, setFundingPools] = useState([]);
@@ -30,17 +41,14 @@ function Withdrawal() {
       });
   }, []);
 
-  // Function to handle changes in withdrawal input fields
   const handleAmountChange = (poolId, amount) => {
     const newAmounts = { ...withdrawalAmounts, [poolId]: amount };
-    // Remove the entry if the amount is empty or zero to keep the state clean
     if (!amount || Number(amount) === 0) {
       delete newAmounts[poolId];
     }
     setWithdrawalAmounts(newAmounts);
   };
 
-  // Calculate the total withdrawal amount
   const totalWithdrawal = Object.values(withdrawalAmounts).reduce((sum, amount) => sum + (Number(amount) || 0), 0);
 
   const handleSubmit = async (e) => {
@@ -57,7 +65,6 @@ function Withdrawal() {
       return;
     }
 
-    // Client-side validation to prevent withdrawing more than available
     for (const poolId in withdrawalAmounts) {
       const pool = fundingPools.find(p => p.id.toString() === poolId);
       if (pool && parseFloat(withdrawalAmounts[poolId]) > pool.current_amount) {
@@ -93,7 +100,6 @@ function Withdrawal() {
       }
 
       setSuccessMessage(`Successfully recorded withdrawal of $${totalWithdrawal.toFixed(2)}.`);
-      // Reset form
       setWithdrawalAmounts({});
       setDescription('');
       // TODO: Re-fetch funding pool data to show updated amounts
@@ -105,65 +111,92 @@ function Withdrawal() {
   };
 
   if (pageLoading) {
-    return <div>Loading funding pools...</div>;
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" height="100vh">
+        <CircularProgress />
+        <Typography variant="h6" sx={{ ml: 2 }}>Loading funding pools...</Typography>
+      </Box>
+    );
   }
 
   if (apiError) {
-    return <div>Error: {apiError}</div>;
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" height="100vh">
+        <Alert severity="error">Error: {apiError}</Alert>
+      </Box>
+    );
   }
 
   return (
-    <div>
-      <h2>Moderator - Make a Withdrawal</h2>
-      <p>Record a withdrawal from funding pools for purchases.</p>
+    <Box sx={{ p: 3, maxWidth: 600, mx: 'auto' }}>
+      <Typography variant="h4" component="h2" gutterBottom>
+        Moderator - Make a Withdrawal
+      </Typography>
+      <Typography variant="body1" paragraph>
+        Record a withdrawal from funding pools for purchases.
+      </Typography>
 
-      {error && <p className={styles.errorText}>{error}</p>}
-      {successMessage && <p className={styles.successMessage}>{successMessage}</p>}
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {successMessage && <Alert severity="success" sx={{ mb: 2 }}>{successMessage}</Alert>}
 
-      <form onSubmit={handleSubmit}>
-        <h3>Select amounts to withdraw from each pool:</h3>
-        {fundingPools.map(pool => (
-          <div key={pool.id} className={styles.poolInputContainer}>
-            <label htmlFor={`withdrawal-${pool.id}`} className={styles.poolLabel}>
-              {pool.name} (Available: ${pool.current_amount.toFixed(2)})
-            </label>
-            <input
-              type="number"
-              id={`withdrawal-${pool.id}`}
-              min="0"
-              max={pool.current_amount.toFixed(2)}
-              step="0.01"
-              value={withdrawalAmounts[pool.id] || ''}
-              onChange={(e) => handleAmountChange(pool.id, e.target.value)}
-              className={styles.poolInput}
-              placeholder="$0.00"
-            />
-          </div>
-        ))}
-        <hr className={styles.divider} />
-        <div className={styles.descriptionContainer}>
-          <label htmlFor="withdrawal-description" className={styles.descriptionLabel}>Description (Required):</label>
-          <br />
-          <textarea
+      <Box component="form" onSubmit={handleSubmit} sx={{ mt: 3 }}>
+        <Typography variant="h5" component="h3" gutterBottom>
+          Select amounts to withdraw from each pool:
+        </Typography>
+        <List>
+          {fundingPools.map(pool => (
+            <ListItem key={pool.id} disableGutters sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
+              <ListItemText
+                primary={`${pool.name} (Available: $${pool.current_amount.toFixed(2)})`}
+                sx={{ flexGrow: 1 }}
+              />
+              <TextField
+                type="number"
+                id={`withdrawal-${pool.id}`}
+                inputProps={{ min: "0", max: pool.current_amount.toFixed(2), step: "0.01" }}
+                value={withdrawalAmounts[pool.id] || ''}
+                onChange={(e) => handleAmountChange(pool.id, e.target.value)}
+                placeholder="$0.00"
+                variant="outlined"
+                size="small"
+                sx={{ width: 150 }}
+              />
+            </ListItem>
+          ))}
+        </List>
+        <Divider sx={{ my: 3 }} />
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h6" component="label" htmlFor="withdrawal-description" gutterBottom>
+            Description (Required):
+          </Typography>
+          <TextField
             id="withdrawal-description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="e.g., Purchased new keg for Kegerator A"
-            rows="3"
+            multiline
+            rows={3}
+            fullWidth
             required
-            className={styles.descriptionTextarea}
+            variant="outlined"
+            sx={{ mt: 1 }}
           />
-        </div>
-        <h3 className={styles.totalWithdrawal}>Total Withdrawal: ${totalWithdrawal.toFixed(2)}</h3>
-        <button
+        </Box>
+        <Typography variant="h5" component="h3" sx={{ mt: 3, mb: 3, textAlign: 'right' }}>
+          Total Withdrawal: ${totalWithdrawal.toFixed(2)}
+        </Typography>
+        <Button
           type="submit"
-          className={styles.submitButton}
+          variant="contained"
+          color="primary"
+          fullWidth
           disabled={loading || totalWithdrawal <= 0 || !description.trim()}
+          startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
         >
           {loading ? 'Recording...' : 'Record Withdrawal'}
-        </button>
-      </form>
-    </div>
+        </Button>
+      </Box>
+    </Box>
   );
 }
 

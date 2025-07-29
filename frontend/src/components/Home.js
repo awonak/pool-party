@@ -1,15 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link as RouterLink } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
-import styles from './Home.module.css';
+
+// Material-UI Imports
+import {
+  Container,
+  Box,
+  Typography,
+  Button,
+  CircularProgress,
+  Alert,
+  Card,
+  CardContent,
+  LinearProgress,
+  Link as MuiLink,
+} from '@mui/material';
 
 function Home({ user, setUser, onLogout }) {
   const [fundingPools, setFundingPools] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // This function is called on successful login from Google's side.
-  // It then sends the credential to our backend for verification and session creation.
   const handleBackendLogin = async (credentialResponse) => {
     try {
       const res = await fetch('/api/auth/google/callback', {
@@ -26,6 +37,7 @@ function Home({ user, setUser, onLogout }) {
 
       const userData = await res.json();
       setUser(userData);
+      setError(null); // Clear previous errors on successful login
     } catch (err) {
       setError(err.message);
     }
@@ -35,10 +47,9 @@ function Home({ user, setUser, onLogout }) {
     const loadInitialData = async () => {
       setLoading(true);
       try {
-        // Fetch funding pools
         const poolsResponse = await fetch('/api/funding-pools');
         if (!poolsResponse.ok) {
-          throw new Error('Network response was not ok');
+          throw new Error('Failed to fetch funding pools.');
         }
         setFundingPools((await poolsResponse.json()) || []);
       } catch (err) {
@@ -52,71 +63,130 @@ function Home({ user, setUser, onLogout }) {
   }, []);
 
   if (loading) {
-    return <div>Loading pools...</div>;
-  }
-
-  if (error) {
-    return <div>Error: {error}</div>;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+        <Typography sx={{ ml: 2 }}>Loading pools...</Typography>
+      </Box>
+    );
   }
 
   return (
-    <div>
-      <div className={styles.userBox}>
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      {/* User Login/Logout Section */}
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
         {user ? (
-          <div>
-            <span>Welcome, {user.first_name}!</span>
-            <button onClick={onLogout} className={styles.logoutButton}>Logout</button>
-          </div>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography>Welcome, {user.first_name}!</Typography>
+            <Button variant="outlined" onClick={onLogout}>Logout</Button>
+          </Box>
         ) : (
           <GoogleLogin
             onSuccess={handleBackendLogin}
             onError={() => setError('Google Login Failed')}
             useOneTap
+            color="secondary"
           />
         )}
-      </div>
-      <h2>Funding Pools</h2>
-      <p>Welcome to Pool Party! Here are the funding pools:</p>
+      </Box>
+      
+      {/* Display General Errors */}
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+
+      {/* Page Header */}
+      <Typography variant="h4" component="h1" gutterBottom>
+        Funding Pools
+      </Typography>
+      <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
+        Welcome to Pool Party! Browse and manage the funding pools below.
+      </Typography>
+
+      {/* Funding Pools List */}
       {fundingPools.length > 0 ? (
-        <ul className={styles.poolList}>
-          {fundingPools.map(pool => (
-            <li key={pool.id} className={styles.poolItem}>
-              <div>
-                <strong>{pool.name}</strong> - Current: ${pool.current_amount.toFixed(2)} / Goal: ${pool.goal_amount.toFixed(2)}
-                {/* Only show the Edit link to moderators */}
-                {user && user.is_moderator && (
-                  <Link to={`/funding-pool-manager/${pool.id}`} className={styles.editLink}>
-                    Edit
-                  </Link>
-                )}
-              </div>
-              <div className={styles.progressBarContainer}>
-                {pool.current_amount > pool.goal_amount && (
-                  <div
-                    className={styles.goalNotch}
-                    style={{
-                      left: `${(pool.goal_amount / pool.current_amount) * 100}%`,
-                    }}
-                    title={`Goal: $${pool.goal_amount.toFixed(2)}`}
-                  ></div>
-                )}
-                <div
-                  className={styles.progressBarFill}
-                  style={{
-                    width: `${(pool.current_amount / Math.max(pool.goal_amount, pool.current_amount)) * 100}%`,
-                    backgroundColor: pool.current_amount >= pool.goal_amount ? '#28a745' : '#007bff',
-                  }}
-                >
-                  {pool.goal_amount > 0 ? `${Math.round((pool.current_amount / pool.goal_amount) * 100)}%` : '100%'}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {fundingPools.map(pool => {
+            const goalAmount = pool.goal_amount;
+            const currentAmount = pool.current_amount;
+            const isGoalMet = currentAmount >= goalAmount;
+
+            // Calculate progress percentage. Can go above 100%.
+            const progressPercent = goalAmount > 0 ? (currentAmount / goalAmount) * 100 : 100;
+
+            return (
+              <Card key={pool.id} variant="outlined">
+                <CardContent>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="h6" component="div">
+                      {pool.name}
+                    </Typography>
+                    {user && user.is_moderator && (
+                      <MuiLink component={RouterLink} to={`/funding-pool-manager/${pool.id}`} underline="hover">
+                        Edit
+                      </MuiLink>
+                    )}
+                  </Box>
+                  <Box>
+                    <Typography variant="body2" color="text.secondary">
+                      {pool.description}
+                    </Typography>
+                  </Box>
+
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                    {`$${currentAmount.toFixed(2)} / $${goalAmount.toFixed(2)}`}
+                  </Typography>
+
+                  {/* Progress Bar with Label and Goal Notch */}
+                  <Box sx={{ mt: 1.5, position: 'relative' }}>
+                    <Box sx={{ position: 'relative' }}>
+                      <LinearProgress
+                        variant="determinate"
+                        value={Math.min(progressPercent, 100)} // Bar visual caps at 100%
+                        color={isGoalMet ? 'success' : 'secondary'}
+                        sx={{ height: 24, borderRadius: 1 }}
+                      />
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          left: 0,
+                          top: 0,
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: 'bold', color: 'white' }}>
+                          {`${Math.round(progressPercent)}%`}
+                        </Typography>
+                      </Box>
+                    </Box>
+                    {/* Goal Notch: Only shows if funding exceeds the goal */}
+                    {isGoalMet && currentAmount > 0 && (
+                      <Box
+                        title={`Goal: $${goalAmount.toFixed(2)}`}
+                        sx={{
+                          position: 'absolute',
+                          left: `${(goalAmount / currentAmount) * 100}%`,
+                          top: 0,
+                          bottom: 0,
+                          width: '3px',
+                          bgcolor: 'rgba(0, 0, 0, 0.4)',
+                          zIndex: 1,
+                        }}
+                      />
+                    )}
+                  </Box>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </Box>
       ) : (
-        <p>No funding pools available at the moment.</p>
+        <Alert severity="info">No funding pools available at the moment.</Alert>
       )}
-    </div>
+    </Container>
   );
 }
 
