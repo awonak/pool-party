@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
+import styles from './Home.module.css';
 
 function Home({ user, setUser, onLogout }) {
   const [fundingPools, setFundingPools] = useState([]);
@@ -60,11 +61,11 @@ function Home({ user, setUser, onLogout }) {
 
   return (
     <div>
-      <div style={{ float: 'right', padding: '10px' }}>
+      <div className={styles.userBox}>
         {user ? (
           <div>
             <span>Welcome, {user.first_name}!</span>
-            <button onClick={onLogout} style={{ marginLeft: '10px' }}>Logout</button>
+            <button onClick={onLogout} className={styles.logoutButton}>Logout</button>
           </div>
         ) : (
           <GoogleLogin
@@ -74,33 +75,39 @@ function Home({ user, setUser, onLogout }) {
           />
         )}
       </div>
-      <h2>Home Page</h2>
+      <h2>Funding Pools</h2>
       <p>Welcome to Pool Party! Here are the funding pools:</p>
       {fundingPools.length > 0 ? (
-        <ul style={{ listStyle: 'none', padding: 0 }}>
+        <ul className={styles.poolList}>
           {fundingPools.map(pool => (
-            <li key={pool.id} style={{ marginBottom: '20px' }}>
+            <li key={pool.id} className={styles.poolItem}>
               <div>
                 <strong>{pool.name}</strong> - Current: ${pool.current_amount.toFixed(2)} / Goal: ${pool.goal_amount.toFixed(2)}
                 {/* Only show the Edit link to moderators */}
                 {user && user.is_moderator && (
-                  <Link to={`/funding-pool-manager/${pool.id}`} style={{ marginLeft: '10px', fontSize: '0.9em' }}>
+                  <Link to={`/funding-pool-manager/${pool.id}`} className={styles.editLink}>
                     Edit
                   </Link>
                 )}
               </div>
-              <div style={{ border: '1px solid #ccc', padding: '2px', marginTop: '5px', width: '300px', backgroundColor: '#f0f0f0' }}>
+              <div className={styles.progressBarContainer}>
+                {pool.current_amount > pool.goal_amount && (
+                  <div
+                    className={styles.goalNotch}
+                    style={{
+                      left: `${(pool.goal_amount / pool.current_amount) * 100}%`,
+                    }}
+                    title={`Goal: $${pool.goal_amount.toFixed(2)}`}
+                  ></div>
+                )}
                 <div
+                  className={styles.progressBarFill}
                   style={{
-                    width: `${Math.min((pool.current_amount / pool.goal_amount) * 100, 100)}%`,
-                    backgroundColor: '#4caf50',
-                    height: '24px',
-                    lineHeight: '24px',
-                    textAlign: 'center',
-                    color: 'white',
+                    width: `${(pool.current_amount / Math.max(pool.goal_amount, pool.current_amount)) * 100}%`,
+                    backgroundColor: pool.current_amount >= pool.goal_amount ? '#28a745' : '#007bff',
                   }}
                 >
-                  {Math.round((pool.current_amount / pool.goal_amount) * 100)}%
+                  {pool.goal_amount > 0 ? `${Math.round((pool.current_amount / pool.goal_amount) * 100)}%` : '100%'}
                 </div>
               </div>
             </li>

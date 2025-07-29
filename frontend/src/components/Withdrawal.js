@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import styles from './Withdrawal.module.css';
 
 function Withdrawal() {
   const [fundingPools, setFundingPools] = useState([]);
@@ -56,6 +57,15 @@ function Withdrawal() {
       return;
     }
 
+    // Client-side validation to prevent withdrawing more than available
+    for (const poolId in withdrawalAmounts) {
+      const pool = fundingPools.find(p => p.id.toString() === poolId);
+      if (pool && parseFloat(withdrawalAmounts[poolId]) > pool.current_amount) {
+        setError(`Cannot withdraw more than available for ${pool.name}.`);
+        return;
+      }
+    }
+
     setLoading(true);
 
     const allocations = Object.entries(withdrawalAmounts)
@@ -86,6 +96,7 @@ function Withdrawal() {
       // Reset form
       setWithdrawalAmounts({});
       setDescription('');
+      // TODO: Re-fetch funding pool data to show updated amounts
     } catch (err) {
       setError(err.message);
     } finally {
@@ -106,14 +117,14 @@ function Withdrawal() {
       <h2>Moderator - Make a Withdrawal</h2>
       <p>Record a withdrawal from funding pools for purchases.</p>
 
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      {successMessage && <p style={{ color: 'green' }}>{successMessage}</p>}
+      {error && <p className={styles.errorText}>{error}</p>}
+      {successMessage && <p className={styles.successMessage}>{successMessage}</p>}
 
       <form onSubmit={handleSubmit}>
         <h3>Select amounts to withdraw from each pool:</h3>
         {fundingPools.map(pool => (
-          <div key={pool.id} style={{ marginBottom: '10px' }}>
-            <label htmlFor={`withdrawal-${pool.id}`}>
+          <div key={pool.id} className={styles.poolInputContainer}>
+            <label htmlFor={`withdrawal-${pool.id}`} className={styles.poolLabel}>
               {pool.name} (Available: ${pool.current_amount.toFixed(2)})
             </label>
             <input
@@ -124,13 +135,14 @@ function Withdrawal() {
               step="0.01"
               value={withdrawalAmounts[pool.id] || ''}
               onChange={(e) => handleAmountChange(pool.id, e.target.value)}
-              style={{ marginLeft: '10px' }}
+              className={styles.poolInput}
+              placeholder="$0.00"
             />
           </div>
         ))}
-        <hr />
-        <div>
-          <label htmlFor="withdrawal-description"><strong>Description (Required):</strong></label>
+        <hr className={styles.divider} />
+        <div className={styles.descriptionContainer}>
+          <label htmlFor="withdrawal-description" className={styles.descriptionLabel}>Description (Required):</label>
           <br />
           <textarea
             id="withdrawal-description"
@@ -139,11 +151,15 @@ function Withdrawal() {
             placeholder="e.g., Purchased new keg for Kegerator A"
             rows="3"
             required
-            style={{ width: '400px', marginTop: '5px' }}
+            className={styles.descriptionTextarea}
           />
         </div>
-        <h3 style={{ marginTop: '20px' }}>Total Withdrawal: ${totalWithdrawal.toFixed(2)}</h3>
-        <button type="submit" disabled={loading || totalWithdrawal <= 0 || !description.trim()}>
+        <h3 className={styles.totalWithdrawal}>Total Withdrawal: ${totalWithdrawal.toFixed(2)}</h3>
+        <button
+          type="submit"
+          className={styles.submitButton}
+          disabled={loading || totalWithdrawal <= 0 || !description.trim()}
+        >
           {loading ? 'Recording...' : 'Record Withdrawal'}
         </button>
       </form>

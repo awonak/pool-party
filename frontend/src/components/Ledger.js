@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import styles from './Ledger.module.css';
 
 function Ledger() {
   const [transactions, setTransactions] = useState([]);
   const [totalDonations, setTotalDonations] = useState(0);
   const [totalWithdrawals, setTotalWithdrawals] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all'); // 'all', 'deposit', 'withdrawal'
   const [error, setError] = useState(null);
   const location = useLocation();
   const successMessage = location.state?.successMessage;
@@ -51,56 +53,73 @@ function Ledger() {
     return <div>Error: {error}</div>;
   }
 
+  const filteredTransactions = transactions.filter(tx => {
+    if (filter === 'all') return true;
+    return tx.transaction_type === filter;
+  });
+
   const netBalance = totalDonations - totalWithdrawals;
   return (
     <div>
       <h2>Ledger Page</h2>
       {successMessage && (
-        <p style={{ color: 'green', border: '1px solid green', padding: '10px', borderRadius: '5px' }}>{successMessage}</p>
+        <p className={styles.successMessage}>{successMessage}</p>
       )}
-      <div style={{ border: '1px solid #ddd', padding: '15px', marginBottom: '20px', borderRadius: '5px', backgroundColor: '#f9f9f9' }}>
+      <div className={styles.summaryBox}>
         <h3>Account Summary</h3>
-        <p style={{ fontSize: '1.2em', margin: 0 }}>
+        <p className={styles.summaryRow}>
           <strong>Total Donations Received:</strong>
-          <span style={{ color: 'green', marginLeft: '10px' }}>
+          <span className={styles.totalDonations}>
             ${totalDonations.toFixed(2)}
           </span>
         </p>
-        <p style={{ fontSize: '1.2em', margin: '5px 0 0 0' }}>
+        <p className={styles.summaryRow}>
           <strong>Total Withdrawals:</strong>
-          <span style={{ color: 'red', marginLeft: '10px' }}>
+          <span className={styles.totalWithdrawals}>
             ${totalWithdrawals.toFixed(2)}
           </span>
         </p>
-        <hr style={{ margin: '10px 0' }} />
-        <p style={{ fontSize: '1.3em', margin: 0 }}>
+        <hr className={styles.summaryDivider} />
+        <p className={styles.netBalance}>
           <strong>Net Balance:</strong>
-          <span style={{ color: netBalance >= 0 ? 'blue' : 'red', marginLeft: '10px', fontWeight: 'bold' }}>
+          <span className={`${styles.netBalanceValue} ${netBalance >= 0 ? styles.positiveBalance : styles.negativeBalance}`}>
             ${netBalance.toFixed(2)}
           </span>
         </p>
       </div>
-      <p>Here's a list of recent transactions:</p>
-      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <h3>Transaction History</h3>
+      <div className={styles.filterContainer}>
+        <label htmlFor="filter-type">Filter by type: </label>
+        <select
+          id="filter-type"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        >
+          <option value="all">All</option>
+          <option value="deposit">Deposits</option>
+          <option value="withdrawal">Withdrawals</option>
+        </select>
+      </div>
+      <table className={styles.transactionTable}>
         <thead>
-          <tr style={{ borderBottom: '2px solid black' }}>
-            <th style={{ textAlign: 'left', padding: '8px' }}>Date</th>
-            <th style={{ textAlign: 'left', padding: '8px' }}>User</th>
-            <th style={{ textAlign: 'left', padding: '8px' }}>Type</th>
-            <th style={{ textAlign: 'right', padding: '8px' }}>Amount</th>
-            <th style={{ textAlign: 'left', padding: '8px' }}>Description</th>
+          <tr className={styles.tableHeader}>
+            <th className={styles.tableHeaderCell}>Date</th>
+            <th className={styles.tableHeaderCell}>User</th>
+            <th className={styles.tableHeaderCell}>Type</th>
+            <th className={styles.tableHeaderCellRight}>Amount</th>
+            <th className={styles.tableHeaderCell}>Description</th>
           </tr>
         </thead>
         <tbody>
-          {transactions.map(tx => (
-            <tr key={tx.id} style={{ borderBottom: '1px solid #ccc' }}>
-              <td style={{ padding: '8px' }}>{new Date(tx.timestamp).toLocaleString()}</td>
-              <td style={{ padding: '8px' }}>{formatUser(tx)}</td>
-              <td style={{ padding: '8px', textTransform: 'capitalize' }}>{tx.transaction_type}</td>
-              <td style={{ padding: '8px', textAlign: 'right', color: tx.transaction_type === 'deposit' ? 'green' : 'red' }}>
+          {filteredTransactions.map(tx => (
+            <tr key={tx.id} className={styles.tableRow}>
+              <td className={styles.tableCell}>{new Date(tx.timestamp).toLocaleString()}</td>
+              <td className={styles.tableCell}>{formatUser(tx)}</td>
+              <td className={`${styles.tableCell} ${styles.transactionType}`}>{tx.transaction_type}</td>
+              <td className={`${styles.tableCellRight} ${tx.transaction_type === 'deposit' ? styles.depositAmount : styles.withdrawalAmount}`}>
                 ${tx.amount.toFixed(2)}
               </td>
-              <td style={{ padding: '8px' }}>{tx.description}</td>
+              <td className={styles.tableCell}>{tx.description}</td>
             </tr>
           ))}
         </tbody>

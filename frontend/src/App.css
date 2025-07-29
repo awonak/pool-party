@@ -1,3 +1,41 @@
 .App {
-  text-align: center;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Basic Navigation Styles */
+nav {
+  background-color: #f8f9fa;
+  padding: 10px 20px;
+  border-radius: 5px;
+  margin-bottom: 20px;
+  border: 1px solid #dee2e6;
+}
+
+nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+nav li {
+  display: inline-block;
+}
+
+nav a {
+  text-decoration: none;
+  color: #007bff;
+  font-weight: bold;
+  padding: 5px 10px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+nav a:hover, nav a:focus {
+  background-color: #e9ecef;
+  color: #0056b3;
 }

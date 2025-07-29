@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import styles from "./FundingPoolManager.module.css";
 
 function FundingPoolManager() {
   const { id } = useParams();
@@ -92,52 +93,60 @@ function FundingPoolManager() {
   }
 
   return (
-    <div>
+    <div className={styles.formContainer}>
       <h2>{isEditMode ? "Edit Funding Pool" : "Funding Pool Manager"}</h2>
       <p>
         {isEditMode
           ? "Modify the details of the funding pool."
           : "Add a new funding pool here."}
       </p>
-
-      {error && <p style={{ color: "red" }}>Error: {error}</p>}
-      {successMessage && (
-        <p style={{ color: "green" }}>{successMessage}</p>
-      )}
-      <h3>{isEditMode ? `Editing: ${name}` : "Add New Funding Pool"}</h3>
       <form onSubmit={handleSubmit}>
-        <div>
-          <label htmlFor="name">Name:</label>
+        <h3>{isEditMode ? `Editing: ${name}` : "Add New Funding Pool"}</h3>
+
+        {error && <p className={styles.errorText}>{error}</p>}
+        {successMessage && <p className={styles.successMessage}>{successMessage}</p>}
+
+        <div className={styles.formGroup}>
+          <label htmlFor="name">Pool Name</label>
           <input
             type="text"
             id="name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
+            placeholder="e.g., Kegerator A"
           />
         </div>
-        <div>
-          <label htmlFor="description">Description:</label>
+        <div className={styles.formGroup}>
+          <label htmlFor="description">Description (Optional)</label>
           <textarea
             id="description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
+            placeholder="e.g., For funding the main office kegerator"
           />
         </div>
-        <div>
-          <label htmlFor="goalAmount">Goal Amount:</label>
+        <div className={styles.formGroup}>
+          <label htmlFor="goalAmount">Goal Amount</label>
           <input
             type="number"
             id="goalAmount"
             value={goalAmount}
             onChange={(e) => setGoalAmount(e.target.value)}
             required
+            min="0"
+            step="0.01"
+            placeholder="e.g., 150.00"
           />
         </div>
-        <button type="submit" disabled={loading || initialLoading}>
+        <button
+          type="submit"
+          disabled={loading || initialLoading}
+          className={styles.submitButton}
+        >
           {loading
-            ? isEditMode ? "Updating..." : "Adding..."
-            : isEditMode ? "Update Funding Pool" : "Add Funding Pool"}
+            ? isEditMode ? "Updating..." : "Creating..."
+            : isEditMode ? "Update Pool" : "Create Pool"}
         </button>
       </form>
     </div>

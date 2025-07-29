@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PayPalButtons, usePayPalScriptReducer } from '@paypal/react-paypal-js';
+import styles from './Donation.module.css';
 
 function Donation() {
   const navigate = useNavigate();
@@ -46,6 +47,7 @@ function Donation() {
       setError("Please enter a donation amount.");
       return;
     }
+    setError(null); // Clear previous errors
     return actions.order.create({
       purchase_units: [{
         amount: {
@@ -67,9 +69,19 @@ function Donation() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ orderID: data.orderID, allocations, description, isAnonymous }),
     })
-    .then(res => res.json())
+    .then(res => {
+        if (!res.ok) {
+            return res.json().then(err => { throw new Error(err.error || 'Donation capture failed.') });
+        }
+        return res.json();
+    })
     .then(details => {
-      navigate('/ledger', { state: { successMessage: `Thank you for your donation, ${details.payer.name.given_name}!` } });
+      const donorName = details.payer && details.payer.name ? details.payer.name.given_name : 'friend';
+      navigate('/ledger', { state: { successMessage: `Thank you for your donation, ${donorName}!` } });
+    })
+    .catch(err => {
+        // Display error from our backend to the user
+        setError(err.message);
     });
   };
 
@@ -78,18 +90,20 @@ function Donation() {
   }
 
   if (error) {
-    return <div>Error: {error}</div>;
+    // Still render the donation form even if there's an error from a previous action
+    // but show the error message. A full-page error is only for initial load failure.
+    if (pageLoading) return <div>Error: {error}</div>;
   }
 
   return (
     <div>
-      <h2>Donation Page</h2>
-      <p>This is the donation page where users can donate to specific funding pools.</p>
-      {error && <p style={{ color: 'red' }}>Error: {error}</p>}
+      <h2>Make a Donation</h2>
+      <p>Choose how to allocate your donation across the funding pools.</p>
+      {error && <p className={styles.errorText}>{error}</p>}
       {fundingPools.length > 0 ? (
         <>
           {fundingPools.map(pool => (
-            <div key={pool.id}>
+            <div key={pool.id} className={styles.poolInputContainer}>
               <label htmlFor={`donation-${pool.id}`}>{pool.name}:</label>
               <input
                 type="number"
@@ -98,25 +112,26 @@ function Donation() {
                 id={`donation-${pool.id}`}
                 value={donationAmounts[pool.id] || ''}
                 onChange={(e) => handleDonationChange(pool.id, e.target.value)}
+                placeholder="$0.00"
               />
             </div>
           ))}
-          <hr />
-          <div style={{ marginBottom: '15px' }}>
+          <hr className={styles.divider} />
+          <div className={styles.anonymousContainer}>
             <input
               type="checkbox"
               id="anonymous-donation"
               checked={isAnonymous}
               onChange={(e) => setIsAnonymous(e.target.checked)}
             />
-            <label htmlFor="anonymous-donation" style={{ marginLeft: '5px' }}>
+            <label htmlFor="anonymous-donation" className={styles.anonymousLabel}>
               Make my donation anonymous
             </label>
-            <p style={{ fontSize: '0.8em', color: '#666', margin: '5px 0 0 0' }}>
+            <p className={styles.anonymousHelpText}>
               If checked, your name will not appear on the public ledger.
             </p>
           </div>
-          <div>
+          <div className={styles.descriptionContainer}>
             <label htmlFor="donation-description">Add a note (optional):</label>
             <br />
             <textarea
@@ -125,11 +140,13 @@ function Donation() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="How would you like your donation to be used?"
               rows="3"
-              style={{ width: '300px', marginTop: '5px' }}
+              className={styles.descriptionTextarea}
             />
           </div>
-          <h3>Total Donation: ${totalDonation.toFixed(2)}</h3>
-          {isPending ? <div>Loading PayPal...</div> : <PayPalButtons createOrder={createOrder} onApprove={onApprove} />}
+          <h3 className={styles.totalDonation}>Total Donation: ${totalDonation.toFixed(2)}</h3>
+          <div className={styles.paypalContainer}>
+            {isPending ? <div>Loading PayPal...</div> : <PayPalButtons createOrder={createOrder} onApprove={onApprove} />}
+          </div>
         </>
       ) : (
         <p>No funding pools are available for donation at this time.</p>
