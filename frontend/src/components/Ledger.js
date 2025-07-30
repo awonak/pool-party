@@ -161,7 +161,7 @@ function Ledger() {
                 <TableCell>{formatUser(tx)}</TableCell>
                 <TableCell>
                   <Chip
-                    label={tx.transaction_type}
+                    label={tx.transaction_type === 'deposit' ? 'donation' : 'purchase'}
                     color={tx.transaction_type === 'deposit' ? 'success' : 'warning'}
                     size="small"
                     variant="outlined"

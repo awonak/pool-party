@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { GoogleLogin } from '@react-oauth/google';
+import { useSiteConfig } from '../context/SiteContext';
 
 // Material-UI Imports
 import {
@@ -20,6 +21,7 @@ function Home({ user, setUser, onLogout }) {
   const [fundingPools, setFundingPools] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const siteConfig = useSiteConfig();
 
   const handleBackendLogin = async (credentialResponse) => {
     try {
@@ -99,7 +101,7 @@ function Home({ user, setUser, onLogout }) {
         Funding Pools
       </Typography>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-        Welcome to Pool Party! Browse and manage the funding pools below.
+        {siteConfig.site_headline}
       </Typography>
 
       {/* Funding Pools List */}
@@ -186,6 +188,19 @@ function Home({ user, setUser, onLogout }) {
       ) : (
         <Alert severity="info">No funding pools available at the moment.</Alert>
       )}
+
+      {/* Donate Button */}
+      <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
+        <Button
+          component={RouterLink}
+          to="/donation"
+          variant="contained"
+          color="secondary"
+          size="large"
+        >
+          Make a Donation
+        </Button>
+      </Box>
     </Container>
   );
 }

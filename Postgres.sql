@@ -2,7 +2,8 @@ CREATE DATABASE pool_party;
 
 CREATE TABLE site_instance (
     id SERIAL PRIMARY KEY,
-    instance_name VARCHAR(255) NOT NULL
+    site_title VARCHAR(255) NOT NULL,
+    site_headline TEXT
 );
 
 CREATE TABLE funding_pool (

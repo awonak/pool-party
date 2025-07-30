@@ -107,6 +107,9 @@ func main() {
 	// Define the Withdrawal routes
 	apiRouter.HandleFunc("/withdrawals", env.MakeWithdrawal).Methods("POST")
 
+	// Define the SiteInstance route
+	apiRouter.HandleFunc("/site-instance", env.GetSiteInstance).Methods("GET")
+
 	spa := spaHandler{staticPath: "../frontend/build", indexPath: "index.html"}
 	router.PathPrefix("/").Handler(spa)
 
