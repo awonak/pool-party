@@ -85,7 +85,7 @@ The project will be open source, making it easy for others to launch their own f
 
 * Exposes RESTful APIs for handling requests from the React frontend.
 * Handles user authentication and authorization.
-* Interacts with SQLite to read and write data.
+* Interacts with database to read and write data.
 * Processes PayPal webhooks to update the ledger.
 
 ### Database (Postgres):
