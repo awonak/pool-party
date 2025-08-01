@@ -102,23 +102,19 @@ func (env *APIEnv) GetLedgerEntries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Query for the total donation amount
+	// Query for the total donations and withdrawals in a single query for efficiency.
 	var totalDonations float64
-	totalQuery := `SELECT COALESCE(SUM(amount), 0) FROM ledger WHERE transaction_type = 'deposit'`
-	err = env.DB.QueryRowContext(r.Context(), totalQuery).Scan(&totalDonations)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Error fetching total donations")
-		log.Printf("Error querying total donations: %v", err)
-		return
-	}
-
-	// Query for the total withdrawal amount
 	var totalWithdrawals float64
-	totalWithdrawalsQuery := `SELECT COALESCE(SUM(amount), 0) FROM ledger WHERE transaction_type = 'withdrawal'`
-	err = env.DB.QueryRowContext(r.Context(), totalWithdrawalsQuery).Scan(&totalWithdrawals)
+	totalsQuery := `
+		SELECT
+			COALESCE(SUM(CASE WHEN transaction_type = 'deposit' THEN amount ELSE 0 END), 0) as total_donations,
+			COALESCE(SUM(CASE WHEN transaction_type = 'withdrawal' THEN amount ELSE 0 END), 0) as total_withdrawals
+		FROM ledger;
+	`
+	err = env.DB.QueryRowContext(r.Context(), totalsQuery).Scan(&totalDonations, &totalWithdrawals)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Error fetching total withdrawals")
-		log.Printf("Error querying total withdrawals: %v", err)
+		respondError(w, http.StatusInternalServerError, "Error fetching ledger totals")
+		log.Printf("Error querying ledger totals: %v", err)
 		return
 	}
 

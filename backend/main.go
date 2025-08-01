@@ -87,28 +87,28 @@ func main() {
 
 	// Define the FundingPool routes
 	apiRouter := router.PathPrefix("/api").Subrouter()
-	apiRouter.HandleFunc("/funding-pools", env.GetFundingPools).Methods("GET")
-	apiRouter.HandleFunc("/funding-pools/{id}", env.GetFundingPool).Methods("GET")
-	apiRouter.HandleFunc("/funding-pools", env.CreateFundingPool).Methods("POST")
-	apiRouter.HandleFunc("/funding-pools/{id}", env.UpdateFundingPool).Methods("PUT")
-	apiRouter.HandleFunc("/funding-pools/{id}", env.DeleteFundingPool).Methods("DELETE")
+	apiRouter.HandleFunc("/funding-pools", env.GetFundingPools).Methods(http.MethodGet)
+	apiRouter.HandleFunc("/funding-pools/{id}", env.GetFundingPool).Methods(http.MethodGet)
+	apiRouter.HandleFunc("/funding-pools", env.ModeratorRequired(env.CreateFundingPool)).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/funding-pools/{id}", env.ModeratorRequired(env.UpdateFundingPool)).Methods(http.MethodPut)
+	apiRouter.HandleFunc("/funding-pools/{id}", env.ModeratorRequired(env.DeleteFundingPool)).Methods(http.MethodDelete)
 
 	// Define the Auth routes
-	apiRouter.HandleFunc("/auth/google/callback", env.GoogleLogin).Methods("POST")
-	apiRouter.HandleFunc("/auth/me", env.GetCurrentUser).Methods("GET")
-	apiRouter.HandleFunc("/auth/logout", env.Logout).Methods("POST")
+	apiRouter.HandleFunc("/auth/google/callback", env.GoogleLogin).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/auth/me", env.GetCurrentUser).Methods(http.MethodGet)
+	apiRouter.HandleFunc("/auth/logout", env.Logout).Methods(http.MethodPost)
 
 	// Define the Ledger routes
-	apiRouter.HandleFunc("/ledger", env.GetLedgerEntries).Methods("GET")
+	apiRouter.HandleFunc("/ledger", env.GetLedgerEntries).Methods(http.MethodGet)
 
 	// Define the Donation routes
-	apiRouter.HandleFunc("/donations/capture", env.CaptureDonation).Methods("POST")
+	apiRouter.HandleFunc("/donations/capture", env.CaptureDonation).Methods(http.MethodPost)
 
 	// Define the Withdrawal routes
-	apiRouter.HandleFunc("/withdrawals", env.MakeWithdrawal).Methods("POST")
+	apiRouter.HandleFunc("/withdrawals", env.ModeratorRequired(env.MakeWithdrawal)).Methods(http.MethodPost)
 
 	// Define the SiteInstance route
-	apiRouter.HandleFunc("/site-instance", env.GetSiteInstance).Methods("GET")
+	apiRouter.HandleFunc("/site-instance", env.GetSiteInstance).Methods(http.MethodGet)
 
 	spa := spaHandler{staticPath: "../frontend/build", indexPath: "index.html"}
 	router.PathPrefix("/").Handler(spa)
