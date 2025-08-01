@@ -1,0 +1,24 @@
+# This file tells the Gemini Code Assist extension which files and directories
+# to exclude from the context provided for chat and code generation.
+# It helps to keep the context focused on relevant source code and improves
+# performance by ignoring large or generated directories.
+
+# General
+.git/
+.DS_Store
+*.log
+
+# IDE/Editor specific
+.vscode/
+.idea/
+
+# Frontend
+frontend/node_modules/
+frontend/build/
+frontend/coverage/
+
+# Backend
+vendor/
+pool-party-api
+*.o
+*.a
