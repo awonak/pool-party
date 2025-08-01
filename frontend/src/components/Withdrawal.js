@@ -23,7 +23,9 @@ function Withdrawal() {
   const [successMessage, setSuccessMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+  const fetchPools = () => {
+    setPageLoading(true);
+    setApiError(null);
     fetch('/api/funding-pools')
       .then(response => {
         if (!response.ok) {
@@ -33,12 +35,17 @@ function Withdrawal() {
       })
       .then(data => {
         setFundingPools(data || []);
-        setPageLoading(false);
       })
       .catch(error => {
         setApiError(error.message);
+      })
+      .finally(() => {
         setPageLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchPools();
   }, []);
 
   const handleAmountChange = (poolId, amount) => {
@@ -102,7 +109,7 @@ function Withdrawal() {
       setSuccessMessage(`Successfully recorded withdrawal of $${totalWithdrawal.toFixed(2)}.`);
       setWithdrawalAmounts({});
       setDescription('');
-      // TODO: Re-fetch funding pool data to show updated amounts
+      fetchPools(); // Re-fetch funding pool data to show updated amounts
     } catch (err) {
       setError(err.message);
     } finally {
