@@ -9,7 +9,17 @@ import {
   Container,
   Box,
   CssBaseline,
+  useTheme,
+  useMediaQuery,
+  IconButton,
+  Drawer,
+  List,
+  ListItem,
+  ListItemButton,
+  ListItemText,
+  Divider,
 } from '@mui/material';
+import MenuIcon from '@mui/icons-material/Menu';
 import './App.css';
 import Home from './components/Home';
 import Donation from './components/Donation';
@@ -19,6 +29,10 @@ import Withdrawal from './components/Withdrawal';
 
 function App() {
   const [user, setUser] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
   const [siteConfig, setSiteConfig] = useState({
     site_title: 'Pool Party', // Default title while loading
     site_headline: 'Welcome! Browse and manage the funding pools below.', // Default headline
@@ -67,6 +81,21 @@ function App() {
     }
   };
 
+  const handleDrawerToggle = () => {
+    setDrawerOpen(!drawerOpen);
+  };
+
+  const navLinks = [
+    { text: 'Home', path: '/' },
+    { text: 'Donation', path: '/donation' },
+    { text: 'Ledger', path: '/ledger' },
+  ];
+
+  const moderatorLinks = [
+    { text: 'Manage Pools', path: '/funding-pool-manager' },
+    { text: 'Make Withdrawal', path: '/withdrawal' },
+  ];
+
     return (
     <SiteContext.Provider value={siteConfig}>
       <Router>
@@ -76,17 +105,65 @@ function App() {
             <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
               {siteConfig.site_title}
             </Typography>
-            <Button color="inherit" component={Link} to="/">Home</Button>
-            <Button color="inherit" component={Link} to="/donation">Donation</Button>
-            <Button color="inherit" component={Link} to="/ledger">Ledger</Button>
-            {user && user.is_moderator && (
-              <>
-                <Button color="inherit" component={Link} to="/funding-pool-manager">Manage Pools</Button>
-                <Button color="inherit" component={Link} to="/withdrawal">Make Withdrawal</Button>
-              </>
+            {isMobile ? (
+              <IconButton
+                color="inherit"
+                aria-label="open drawer"
+                edge="end"
+                onClick={handleDrawerToggle}
+              >
+                <MenuIcon />
+              </IconButton>
+            ) : (
+              <Box>
+                {navLinks.map((link) => (
+                  <Button key={link.path} color="inherit" component={Link} to={link.path}>
+                    {link.text}
+                  </Button>
+                ))}
+                {user && user.is_moderator && moderatorLinks.map((link) => (
+                  <Button key={link.path} color="inherit" component={Link} to={link.path}>
+                    {link.text}
+                  </Button>
+                ))}
+              </Box>
             )}
           </Toolbar>
         </AppBar>
+        <Drawer
+          anchor="right"
+          open={drawerOpen}
+          onClose={handleDrawerToggle}
+        >
+          <Box
+            sx={{ width: 250 }}
+            role="presentation"
+            onClick={handleDrawerToggle}
+            onKeyDown={handleDrawerToggle}
+          >
+            <List>
+              {navLinks.map((link) => (
+                <ListItem key={link.path} disablePadding>
+                  <ListItemButton component={Link} to={link.path}>
+                    <ListItemText primary={link.text} />
+                  </ListItemButton>
+                </ListItem>
+              ))}
+              {user && user.is_moderator && (
+                <>
+                  <Divider />
+                  {moderatorLinks.map((link) => (
+                    <ListItem key={link.path} disablePadding>
+                      <ListItemButton component={Link} to={link.path}>
+                        <ListItemText primary={link.text} />
+                      </ListItemButton>
+                    </ListItem>
+                  ))}
+                </>
+              )}
+            </List>
+          </Box>
+        </Drawer>
         <Container component="main" sx={{ mt: 4, mb: 4 }}>
           <Box>
             <Routes>
