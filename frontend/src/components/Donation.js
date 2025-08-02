@@ -31,6 +31,9 @@ function Donation() {
   const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Constants
+  const MINIMUM_DONATION = 10.00;
+
   useEffect(() => {
     setPageLoading(true);
     fetch('/api/funding-pools')
@@ -59,9 +62,9 @@ function Donation() {
   const totalDonation = Object.values(donationAmounts).reduce((sum, amount) => sum + (Number(amount) || 0), 0);
 
   const createOrder = (data, actions) => {
-    if (totalDonation <= 0) {
-      setError("Please enter a donation amount greater than $0.00.");
-      return Promise.reject(new Error("Invalid amount"));
+    if (totalDonation < MINIMUM_DONATION) {
+      setError(`The minimum donation amount is $${MINIMUM_DONATION.toFixed(2)}.`);
+      return Promise.reject(new Error("Minimum donation amount not met."));
     }
     setError(null); // Clear previous errors
     return actions.order.create({
@@ -115,7 +118,7 @@ function Donation() {
           Make a Donation
         </Typography>
         <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-          Choose how to allocate your donation across the funding pools.
+          Choose how to allocate your donation across the funding pools. The minimum donation is $10.00.
         </Typography>
 
         {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
@@ -143,12 +146,11 @@ function Donation() {
 
             <TextField
               fullWidth
-              label="Add a note (optional)"
               multiline
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="How would you like your donation to be used?"
+              placeholder="How would you like your donation to be used? (optional)"
               sx={{ mb: 2 }}
             />
             
