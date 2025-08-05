@@ -33,6 +33,7 @@ function Donation() {
 
   // Constants
   const MINIMUM_DONATION = 10.00;
+  const MAX_DESCRIPTION_LENGTH = 255;
 
   useEffect(() => {
     setPageLoading(true);
@@ -151,6 +152,9 @@ function Donation() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="How would you like your donation to be used? (optional)"
+              inputProps={{ maxLength: MAX_DESCRIPTION_LENGTH }}
+              helperText={`${description.length}/${MAX_DESCRIPTION_LENGTH}`}
+              error={description.length > MAX_DESCRIPTION_LENGTH}
               sx={{ mb: 2 }}
             />
             
