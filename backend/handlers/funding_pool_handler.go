@@ -13,35 +13,6 @@ import (
 
 // --- Utility Functions ---
 
-// respondJSON sends a JSON response with the given status and data.
-func respondJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		log.Printf("Error encoding JSON response: %v", err)
-	}
-}
-
-// respondError sends an error JSON response with the given status and message.
-func respondError(w http.ResponseWriter, status int, message string) {
-	respondJSON(w, status, map[string]string{"error": message})
-}
-
-// getIDFromRequest extracts and converts the 'id' URL parameter to an int.
-func getIDFromRequest(r *http.Request) (int, error) {
-	vars := mux.Vars(r)
-	idStr, ok := vars["id"]
-	if !ok {
-		return 0, models.NewRequestError("ID is missing from parameters", http.StatusBadRequest)
-	}
-
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		return 0, models.NewRequestError("Invalid ID format", http.StatusBadRequest)
-	}
-	return id, nil
-}
-
 // decodeAndValidateFundingPoolRequest decodes the request body and validates common fields.
 func decodeAndValidateFundingPoolRequest(r *http.Request) (*models.CreateFundingPoolRequest, error) {
 	var req models.CreateFundingPoolRequest
@@ -113,23 +84,23 @@ func (env *APIEnv) GetFundingPools(w http.ResponseWriter, r *http.Request) {
 	pools, err := env.getFundingPoolQuery(r, 0) // Fetch all pools
 	if err != nil {
 		if reqErr, ok := err.(*models.RequestError); ok {
-			respondError(w, reqErr.Status, reqErr.Message)
+			RespondError(w, reqErr.Status, reqErr.Message)
 		} else {
-			respondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+			RespondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		}
 		return
 	}
-	respondJSON(w, http.StatusOK, pools)
+	RespondJSON(w, http.StatusOK, pools)
 }
 
 // GetFundingPool fetches a single funding pool by its ID.
 func (env *APIEnv) GetFundingPool(w http.ResponseWriter, r *http.Request) {
-	id, err := getIDFromRequest(r)
+	id, err := GetIDFromRequest(r)
 	if err != nil {
 		if reqErr, ok := err.(*models.RequestError); ok {
-			respondError(w, reqErr.Status, reqErr.Message)
+			RespondError(w, reqErr.Status, reqErr.Message)
 		} else { // Should not happen for getIDFromRequest
-			respondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+			RespondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		}
 		return
 	}
@@ -137,18 +108,18 @@ func (env *APIEnv) GetFundingPool(w http.ResponseWriter, r *http.Request) {
 	pools, err := env.getFundingPoolQuery(r, id)
 	if err != nil {
 		if reqErr, ok := err.(*models.RequestError); ok {
-			respondError(w, reqErr.Status, reqErr.Message)
+			RespondError(w, reqErr.Status, reqErr.Message)
 		} else {
-			respondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+			RespondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		}
 		return
 	}
 
 	if len(pools) == 0 {
-		respondError(w, http.StatusNotFound, "Funding pool not found")
+		RespondError(w, http.StatusNotFound, "Funding pool not found")
 		return
 	}
-	respondJSON(w, http.StatusOK, pools[0])
+	RespondJSON(w, http.StatusOK, pools[0])
 }
 
 // CreateFundingPool handles the creation of a new funding pool.
@@ -157,20 +128,20 @@ func (env *APIEnv) CreateFundingPool(w http.ResponseWriter, r *http.Request) {
 	session, _ := env.SessionStore.Get(r, "pool-party-session")
 	googleID, ok := session.Values["google_id"].(string)
 	if !ok || !session.Values["authenticated"].(bool) {
-		respondError(w, http.StatusUnauthorized, "Not authenticated")
+		RespondError(w, http.StatusUnauthorized, "Not authenticated")
 		return
 	}
 	var isModerator bool
 	err := env.DB.QueryRowContext(r.Context(), "SELECT is_moderator FROM users WHERE google_id = $1", googleID).Scan(&isModerator)
 	if err != nil || !isModerator {
-		respondError(w, http.StatusForbidden, "User is not a moderator")
+		RespondError(w, http.StatusForbidden, "User is not a moderator")
 		return
 	}
 
 	req, err := decodeAndValidateFundingPoolRequest(r)
 	if err != nil {
 		if reqErr, ok := err.(*models.RequestError); ok {
-			respondError(w, reqErr.Status, reqErr.Message)
+			RespondError(w, reqErr.Status, reqErr.Message)
 		}
 		return
 	}
@@ -185,7 +156,7 @@ func (env *APIEnv) CreateFundingPool(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Consider adding more specific error handling for unique constraint violations etc.
 		log.Printf("Error inserting new funding pool: %v", err)
-		respondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		RespondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 
@@ -197,7 +168,7 @@ func (env *APIEnv) CreateFundingPool(w http.ResponseWriter, r *http.Request) {
 		CurrentAmount: 0,
 	}
 
-	respondJSON(w, http.StatusCreated, newPool)
+	RespondJSON(w, http.StatusCreated, newPool)
 }
 
 // UpdateFundingPool handles updates to an existing funding pool.
@@ -206,22 +177,22 @@ func (env *APIEnv) UpdateFundingPool(w http.ResponseWriter, r *http.Request) {
 	session, _ := env.SessionStore.Get(r, "pool-party-session")
 	googleID, ok := session.Values["google_id"].(string)
 	if !ok || !session.Values["authenticated"].(bool) {
-		respondError(w, http.StatusUnauthorized, "Not authenticated")
+		RespondError(w, http.StatusUnauthorized, "Not authenticated")
 		return
 	}
 	var isModerator bool
 	err := env.DB.QueryRowContext(r.Context(), "SELECT is_moderator FROM users WHERE google_id = $1", googleID).Scan(&isModerator)
 	if err != nil || !isModerator {
-		respondError(w, http.StatusForbidden, "User is not a moderator")
+		RespondError(w, http.StatusForbidden, "User is not a moderator")
 		return
 	}
 
-	id, err := getIDFromRequest(r)
+	id, err := GetIDFromRequest(r)
 	if err != nil {
 		if reqErr, ok := err.(*models.RequestError); ok {
-			respondError(w, reqErr.Status, reqErr.Message)
+			RespondError(w, reqErr.Status, reqErr.Message)
 		} else {
-			respondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+			RespondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		}
 		return
 	}
@@ -229,7 +200,7 @@ func (env *APIEnv) UpdateFundingPool(w http.ResponseWriter, r *http.Request) {
 	req, err := decodeAndValidateFundingPoolRequest(r)
 	if err != nil {
 		if reqErr, ok := err.(*models.RequestError); ok {
-			respondError(w, reqErr.Status, reqErr.Message)
+			RespondError(w, reqErr.Status, reqErr.Message)
 		}
 		return
 	}
@@ -238,13 +209,13 @@ func (env *APIEnv) UpdateFundingPool(w http.ResponseWriter, r *http.Request) {
 	result, err := env.DB.ExecContext(r.Context(), updateQuery, req.Name, req.Description, req.GoalAmount, id)
 	if err != nil {
 		log.Printf("Error updating funding pool with ID %d: %v", id, err)
-		respondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		RespondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		respondError(w, http.StatusNotFound, "Funding pool not found")
+		RespondError(w, http.StatusNotFound, "Funding pool not found")
 		return
 	}
 
@@ -253,17 +224,17 @@ func (env *APIEnv) UpdateFundingPool(w http.ResponseWriter, r *http.Request) {
 	updatedPools, err := env.getFundingPoolQuery(r, id)
 	if err != nil {
 		if reqErr, ok := err.(*models.RequestError); ok {
-			respondError(w, reqErr.Status, reqErr.Message)
+			RespondError(w, reqErr.Status, reqErr.Message)
 		} else {
-			respondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+			RespondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		}
 		return
 	}
 	if len(updatedPools) == 0 { // Should not happen if rowsAffected > 0
-		respondError(w, http.StatusNotFound, "Updated funding pool not found after fetch")
+		RespondError(w, http.StatusNotFound, "Updated funding pool not found after fetch")
 		return
 	}
-	respondJSON(w, http.StatusOK, updatedPools[0])
+	RespondJSON(w, http.StatusOK, updatedPools[0])
 }
 
 // DeleteFundingPool handles the deletion of a funding pool.
@@ -272,22 +243,22 @@ func (env *APIEnv) DeleteFundingPool(w http.ResponseWriter, r *http.Request) {
 	session, _ := env.SessionStore.Get(r, "pool-party-session")
 	googleID, ok := session.Values["google_id"].(string)
 	if !ok || !session.Values["authenticated"].(bool) {
-		respondError(w, http.StatusUnauthorized, "Not authenticated")
+		RespondError(w, http.StatusUnauthorized, "Not authenticated")
 		return
 	}
 	var isModerator bool
 	err := env.DB.QueryRowContext(r.Context(), "SELECT is_moderator FROM users WHERE google_id = $1", googleID).Scan(&isModerator)
 	if err != nil || !isModerator {
-		respondError(w, http.StatusForbidden, "User is not a moderator")
+		RespondError(w, http.StatusForbidden, "User is not a moderator")
 		return
 	}
 
-	id, err := getIDFromRequest(r)
+	id, err := GetIDFromRequest(r)
 	if err != nil {
 		if reqErr, ok := err.(*models.RequestError); ok {
-			respondError(w, reqErr.Status, reqErr.Message)
+			RespondError(w, reqErr.Status, reqErr.Message)
 		} else {
-			respondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+			RespondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		}
 		return
 	}
@@ -295,7 +266,7 @@ func (env *APIEnv) DeleteFundingPool(w http.ResponseWriter, r *http.Request) {
 	tx, err := env.DB.BeginTx(r.Context(), nil)
 	if err != nil {
 		log.Printf("Error starting transaction: %v", err)
-		respondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		RespondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 	defer tx.Rollback() // Will be rolled back if Commit() is not called
@@ -305,12 +276,12 @@ func (env *APIEnv) DeleteFundingPool(w http.ResponseWriter, r *http.Request) {
 	err = tx.QueryRowContext(r.Context(), checkQuery, id).Scan(&allocationExists)
 
 	if err == nil { // Row found, allocations exist
-		respondError(w, http.StatusBadRequest, "Cannot delete funding pool with existing donations")
+		RespondError(w, http.StatusBadRequest, "Cannot delete funding pool with existing donations")
 		return
 	}
 	if err != sql.ErrNoRows { // Unexpected DB error
 		log.Printf("Error checking for allocations for pool ID %d: %v", id, err)
-		respondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		RespondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 
@@ -318,19 +289,19 @@ func (env *APIEnv) DeleteFundingPool(w http.ResponseWriter, r *http.Request) {
 	result, err := tx.ExecContext(r.Context(), deleteQuery, id)
 	if err != nil {
 		log.Printf("Error deleting funding pool with ID %d: %v", id, err)
-		respondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		RespondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 
 	rowsAffected, _ := result.RowsAffected()
 	if rowsAffected == 0 {
-		respondError(w, http.StatusNotFound, "Funding pool not found")
+		RespondError(w, http.StatusNotFound, "Funding pool not found")
 		return
 	}
 
 	if err := tx.Commit(); err != nil {
 		log.Printf("Error committing transaction for deleting pool ID %d: %v", id, err)
-		respondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
+		RespondError(w, http.StatusInternalServerError, http.StatusText(http.StatusInternalServerError))
 		return
 	}
 

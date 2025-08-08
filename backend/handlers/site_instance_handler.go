@@ -18,10 +18,10 @@ func (env *APIEnv) GetSiteInstance(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Println("Critical: site_instance table not seeded with id=1")
-			respondError(w, http.StatusInternalServerError, "Site configuration not found.")
+			RespondError(w, http.StatusInternalServerError, "Site configuration not found.")
 		} else {
 			log.Printf("Error querying site_instance: %v", err)
-			respondError(w, http.StatusInternalServerError, "Error fetching site configuration.")
+			RespondError(w, http.StatusInternalServerError, "Error fetching site configuration.")
 		}
 		return
 	}
@@ -30,5 +30,5 @@ func (env *APIEnv) GetSiteInstance(w http.ResponseWriter, r *http.Request) {
 		instance.SiteHeadline = &headline.String
 	}
 
-	respondJSON(w, http.StatusOK, instance)
+	RespondJSON(w, http.StatusOK, instance)
 }

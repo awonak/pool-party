@@ -23,12 +23,12 @@ type CaptureDonationRequest struct {
 func (env *APIEnv) CaptureDonation(w http.ResponseWriter, r *http.Request) {
 	var req CaptureDonationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid request body")
+		RespondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if req.OrderID == "" {
-		respondError(w, http.StatusBadRequest, "Missing orderID")
+		RespondError(w, http.StatusBadRequest, "Missing orderID")
 		return
 	}
 
@@ -36,7 +36,7 @@ func (env *APIEnv) CaptureDonation(w http.ResponseWriter, r *http.Request) {
 	ppClient, err := paypal.NewClient()
 	if err != nil {
 		log.Printf("Error creating PayPal client: %v", err)
-		respondError(w, http.StatusInternalServerError, "PayPal client configuration error")
+		RespondError(w, http.StatusInternalServerError, "PayPal client configuration error")
 		return
 	}
 
@@ -44,7 +44,7 @@ func (env *APIEnv) CaptureDonation(w http.ResponseWriter, r *http.Request) {
 	accessToken, err := ppClient.GetAccessToken(r.Context())
 	if err != nil {
 		log.Printf("Error getting PayPal access token: %v", err)
-		respondError(w, http.StatusInternalServerError, "Failed to authenticate with PayPal")
+		RespondError(w, http.StatusInternalServerError, "Failed to authenticate with PayPal")
 		return
 	}
 
@@ -52,20 +52,20 @@ func (env *APIEnv) CaptureDonation(w http.ResponseWriter, r *http.Request) {
 	captureResponse, err := ppClient.CaptureOrder(r.Context(), req.OrderID, accessToken)
 	if err != nil {
 		log.Printf("Error capturing PayPal order %s: %v", req.OrderID, err)
-		respondError(w, http.StatusInternalServerError, "Failed to capture PayPal payment")
+		RespondError(w, http.StatusInternalServerError, "Failed to capture PayPal payment")
 		return
 	}
 
 	// Validate the capture was successful
 	if captureResponse.Status != "COMPLETED" {
-		respondError(w, http.StatusInternalServerError, "PayPal payment not completed")
+		RespondError(w, http.StatusInternalServerError, "PayPal payment not completed")
 		log.Printf("PayPal order %s status is %s, not COMPLETED", req.OrderID, captureResponse.Status)
 		return
 	}
 
 	// Extract captured amount from PayPal response
 	if len(captureResponse.PurchaseUnits) == 0 || len(captureResponse.PurchaseUnits[0].Payments.Captures) == 0 {
-		respondError(w, http.StatusInternalServerError, "Invalid PayPal capture response")
+		RespondError(w, http.StatusInternalServerError, "Invalid PayPal capture response")
 		log.Printf("PayPal order %s has no purchase units or captures", req.OrderID)
 		return
 	}
@@ -73,7 +73,7 @@ func (env *APIEnv) CaptureDonation(w http.ResponseWriter, r *http.Request) {
 	capturedAmountStr := captureResponse.PurchaseUnits[0].Payments.Captures[0].Amount.Value
 	capturedAmount, err := strconv.ParseFloat(capturedAmountStr, 64)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Invalid amount in PayPal response")
+		RespondError(w, http.StatusInternalServerError, "Invalid amount in PayPal response")
 		log.Printf("Could not parse captured amount '%s' for order %s: %v", capturedAmountStr, req.OrderID, err)
 		return
 	}
@@ -82,7 +82,7 @@ func (env *APIEnv) CaptureDonation(w http.ResponseWriter, r *http.Request) {
 	var totalAllocation float64
 	for _, alloc := range req.Allocations {
 		if alloc.Amount < 0 {
-			respondError(w, http.StatusBadRequest, "Donation amounts cannot be negative.")
+			RespondError(w, http.StatusBadRequest, "Donation amounts cannot be negative.")
 			return
 		}
 		totalAllocation += alloc.Amount
@@ -97,7 +97,7 @@ func (env *APIEnv) CaptureDonation(w http.ResponseWriter, r *http.Request) {
 		// potentially involving an automated refund.
 		log.Printf("CRITICAL: Amount mismatch for order %s. PayPal: %.2f, Frontend: %.2f",
 			req.OrderID, capturedAmount, totalAllocation)
-		respondError(w, http.StatusBadRequest, "Transaction amount mismatch. Please contact support.")
+		RespondError(w, http.StatusBadRequest, "Transaction amount mismatch. Please contact support.")
 		return
 	}
 
@@ -105,7 +105,7 @@ func (env *APIEnv) CaptureDonation(w http.ResponseWriter, r *http.Request) {
 	tx, err := env.DB.BeginTx(r.Context(), nil)
 	if err != nil {
 		log.Printf("Failed to start database transaction: %v", err)
-		respondError(w, http.StatusInternalServerError, "Database error")
+		RespondError(w, http.StatusInternalServerError, "Database error")
 		return
 	}
 	defer tx.Rollback() // Rollback on any error
@@ -166,7 +166,7 @@ func (env *APIEnv) CaptureDonation(w http.ResponseWriter, r *http.Request) {
 	err = tx.QueryRowContext(r.Context(), ledgerQuery, paypalTransactionID, capturedAmount, userGoogleID, firstName, lastInitial, anonymous, description).Scan(&ledgerID)
 	if err != nil {
 		log.Printf("Failed to insert into ledger: %v", err)
-		respondError(w, http.StatusInternalServerError, "Failed to record transaction")
+		RespondError(w, http.StatusInternalServerError, "Failed to record transaction")
 		return
 	}
 
@@ -176,7 +176,7 @@ func (env *APIEnv) CaptureDonation(w http.ResponseWriter, r *http.Request) {
 			_, err := tx.ExecContext(r.Context(), "INSERT INTO allocation (ledger_id, funding_pool_id, amount) VALUES ($1, $2, $3)", ledgerID, alloc.FundingPoolID, alloc.Amount)
 			if err != nil {
 				log.Printf("Failed to insert allocation for pool %d: %v", alloc.FundingPoolID, err)
-				respondError(w, http.StatusInternalServerError, "Failed to record transaction allocation")
+				RespondError(w, http.StatusInternalServerError, "Failed to record transaction allocation")
 				return
 			}
 		}
@@ -185,11 +185,11 @@ func (env *APIEnv) CaptureDonation(w http.ResponseWriter, r *http.Request) {
 	// Commit the transaction if all inserts were successful
 	if err := tx.Commit(); err != nil {
 		log.Printf("Failed to commit transaction: %v", err)
-		respondError(w, http.StatusInternalServerError, "Failed to finalize transaction")
+		RespondError(w, http.StatusInternalServerError, "Failed to finalize transaction")
 		return
 	}
 
 	log.Printf("Successfully recorded transaction for PayPal order %s. Ledger ID: %d", req.OrderID, ledgerID)
 
-	respondJSON(w, http.StatusOK, captureResponse)
+	RespondJSON(w, http.StatusOK, captureResponse)
 }

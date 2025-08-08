@@ -16,37 +16,37 @@ func (env *APIEnv) MakeWithdrawal(w http.ResponseWriter, r *http.Request) {
 	session, _ := env.SessionStore.Get(r, "pool-party-session")
 	googleID, ok := session.Values["google_id"].(string)
 	if !ok || !session.Values["authenticated"].(bool) {
-		respondError(w, http.StatusUnauthorized, "Not authenticated")
+		RespondError(w, http.StatusUnauthorized, "Not authenticated")
 		return
 	}
 
 	var isModerator bool
 	err := env.DB.QueryRowContext(r.Context(), "SELECT is_moderator FROM users WHERE google_id = $1", googleID).Scan(&isModerator)
 	if err != nil || !isModerator {
-		respondError(w, http.StatusForbidden, "User is not a moderator")
+		RespondError(w, http.StatusForbidden, "User is not a moderator")
 		return
 	}
 
 	// Step 2: Decode and Validate Request Body
 	var req models.WithdrawalRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid request body")
+		RespondError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
 	if req.Description == "" {
-		respondError(w, http.StatusBadRequest, "Description is required")
+		RespondError(w, http.StatusBadRequest, "Description is required")
 		return
 	}
 	if len(req.Allocations) == 0 {
-		respondError(w, http.StatusBadRequest, "At least one allocation is required")
+		RespondError(w, http.StatusBadRequest, "At least one allocation is required")
 		return
 	}
 
 	var totalWithdrawal float64
 	for _, alloc := range req.Allocations {
 		if alloc.Amount <= 0 {
-			respondError(w, http.StatusBadRequest, "Withdrawal amounts must be positive")
+			RespondError(w, http.StatusBadRequest, "Withdrawal amounts must be positive")
 			return
 		}
 		totalWithdrawal += alloc.Amount
@@ -56,7 +56,7 @@ func (env *APIEnv) MakeWithdrawal(w http.ResponseWriter, r *http.Request) {
 	tx, err := env.DB.BeginTx(r.Context(), nil)
 	if err != nil {
 		log.Printf("Failed to start database transaction: %v", err)
-		respondError(w, http.StatusInternalServerError, "Database error")
+		RespondError(w, http.StatusInternalServerError, "Database error")
 		return
 	}
 	defer tx.Rollback()
@@ -73,12 +73,12 @@ func (env *APIEnv) MakeWithdrawal(w http.ResponseWriter, r *http.Request) {
 		err := tx.QueryRowContext(r.Context(), poolQuery, alloc.FundingPoolID).Scan(&poolBalance)
 		if err != nil {
 			log.Printf("Failed to get balance for pool %d: %v", alloc.FundingPoolID, err)
-			respondError(w, http.StatusInternalServerError, "Could not verify pool funds")
+			RespondError(w, http.StatusInternalServerError, "Could not verify pool funds")
 			return
 		}
 		if alloc.Amount > poolBalance {
 			msg := fmt.Sprintf("Withdrawal amount for a pool exceeds its balance of $%.2f", poolBalance)
-			respondError(w, http.StatusBadRequest, msg)
+			RespondError(w, http.StatusBadRequest, msg)
 			return
 		}
 	}
@@ -102,7 +102,7 @@ func (env *APIEnv) MakeWithdrawal(w http.ResponseWriter, r *http.Request) {
 	err = tx.QueryRowContext(r.Context(), ledgerQuery, totalWithdrawal, googleID, userFirstName, lastNameInitial, req.Description).Scan(&ledgerID)
 	if err != nil {
 		log.Printf("Failed to insert withdrawal into ledger: %v", err)
-		respondError(w, http.StatusInternalServerError, "Failed to record withdrawal")
+		RespondError(w, http.StatusInternalServerError, "Failed to record withdrawal")
 		return
 	}
 
@@ -111,7 +111,7 @@ func (env *APIEnv) MakeWithdrawal(w http.ResponseWriter, r *http.Request) {
 		_, err := tx.ExecContext(r.Context(), "INSERT INTO allocation (ledger_id, funding_pool_id, amount) VALUES ($1, $2, $3)", ledgerID, alloc.FundingPoolID, alloc.Amount)
 		if err != nil {
 			log.Printf("Failed to insert withdrawal allocation for pool %d: %v", alloc.FundingPoolID, err)
-			respondError(w, http.StatusInternalServerError, "Failed to record withdrawal allocation")
+			RespondError(w, http.StatusInternalServerError, "Failed to record withdrawal allocation")
 			return
 		}
 	}
@@ -119,10 +119,10 @@ func (env *APIEnv) MakeWithdrawal(w http.ResponseWriter, r *http.Request) {
 	// Step 7: Commit Transaction
 	if err := tx.Commit(); err != nil {
 		log.Printf("Failed to commit withdrawal transaction: %v", err)
-		respondError(w, http.StatusInternalServerError, "Failed to finalize withdrawal")
+		RespondError(w, http.StatusInternalServerError, "Failed to finalize withdrawal")
 		return
 	}
 
 	log.Printf("Successfully recorded withdrawal by user %s. Ledger ID: %d", googleID, ledgerID)
-	respondJSON(w, http.StatusCreated, map[string]string{"message": "Withdrawal recorded successfully"})
+	RespondJSON(w, http.StatusCreated, map[string]string{"message": "Withdrawal recorded successfully"})
 }
