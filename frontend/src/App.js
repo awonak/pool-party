@@ -168,7 +168,7 @@ function App() {
           <Box>
             <Routes>
               <Route path="/" element={<Home user={user} setUser={setUser} onLogout={handleLogout} />} />
-              <Route path="/donation" element={<Donation />} />
+              <Route path="/donation" element={<Donation user={user} />} />
               <Route path="/ledger" element={<Ledger />} />
               <Route path="/funding-pool-manager" element={<FundingPoolManager />} />
               <Route path="/funding-pool-manager/:id" element={<FundingPoolManager />} />

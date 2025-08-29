@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"log"
@@ -17,6 +18,66 @@ type CaptureDonationRequest struct {
 	Allocations []models.AllocationRequest `json:"allocations"`
 	Description string                     `json:"description,omitempty"`
 	IsAnonymous bool                       `json:"isAnonymous"`
+}
+
+// ExternalDonationRequest is the expected request body for creating an external donation.
+type ExternalDonationRequest struct {
+	Allocations []models.AllocationRequest `json:"allocations"`
+	Description string                     `json:"description"`
+}
+
+// LedgerEntryData is a struct for passing all necessary data to create a ledger entry and its allocations.
+type LedgerEntryData struct {
+	TransactionID   sql.NullString
+	Amount          float64
+	TransactionType string
+	UserGoogleID    sql.NullString
+	FirstName       sql.NullString
+	LastInitial     sql.NullString
+	Anonymous       bool
+	Description     sql.NullString
+	Allocations     []models.AllocationRequest
+}
+
+// CreateLedgerEntriesInTx is a helper function to record a transaction and its allocations in the database
+// using an existing transaction. It does not commit or rollback the transaction.
+func (env *APIEnv) CreateLedgerEntriesInTx(ctx context.Context, tx *sql.Tx, data LedgerEntryData) (int, error) {
+	var ledgerID int
+	ledgerQuery := `
+		INSERT INTO ledger (transaction_id, amount, transaction_type, user_google_id, first_name, last_initial, anonymous, description)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id`
+	err := tx.QueryRowContext(ctx, ledgerQuery, data.TransactionID, data.Amount, data.TransactionType, data.UserGoogleID, data.FirstName, data.LastInitial, data.Anonymous, data.Description).Scan(&ledgerID)
+	if err != nil {
+		return 0, err
+	}
+
+	for _, alloc := range data.Allocations {
+		if alloc.Amount > 0 {
+			if _, err := tx.ExecContext(ctx, "INSERT INTO allocation (ledger_id, funding_pool_id, amount) VALUES ($1, $2, $3)", ledgerID, alloc.FundingPoolID, alloc.Amount); err != nil {
+				return 0, err
+			}
+		}
+	}
+
+	return ledgerID, nil
+}
+
+// createLedgerEntries is a wrapper for CreateLedgerEntriesInTx that handles its own transaction.
+func (env *APIEnv) createLedgerEntries(ctx context.Context, data LedgerEntryData) (int, error) {
+	tx, err := env.DB.BeginTx(ctx, nil)
+	if err != nil {
+		log.Printf("Failed to start database transaction: %v", err)
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	ledgerID, err := env.CreateLedgerEntriesInTx(ctx, tx, data)
+	if err != nil {
+		return 0, err
+	}
+
+	return ledgerID, tx.Commit()
 }
 
 // CaptureDonation verifies a PayPal order, captures the payment, and records the transaction.
@@ -101,21 +162,12 @@ func (env *APIEnv) CaptureDonation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// --- Database Transaction Starts Here ---
-	tx, err := env.DB.BeginTx(r.Context(), nil)
-	if err != nil {
-		log.Printf("Failed to start database transaction: %v", err)
-		respondError(w, http.StatusInternalServerError, "Database error")
-		return
-	}
-	defer tx.Rollback() // Rollback on any error
-
 	// Determine user's name and anonymity status
 	var userGoogleID, firstName, lastInitial sql.NullString
 	anonymous := req.IsAnonymous
 
 	session, _ := env.SessionStore.Get(r, "pool-party-session")
-	if googleID, ok := session.Values["google_id"].(string); ok && session.Values["authenticated"].(bool) {
+	if googleID, ok := session.Values["google_id"].(string); ok {
 		// If user is logged in, always associate the transaction with their ID for internal tracking.
 		userGoogleID.String = googleID
 		userGoogleID.Valid = true
@@ -124,7 +176,7 @@ func (env *APIEnv) CaptureDonation(w http.ResponseWriter, r *http.Request) {
 		if !anonymous {
 			var dbFirstName, lastName string
 			userQuery := `SELECT first_name, last_name FROM users WHERE google_id = $1`
-			err := tx.QueryRowContext(r.Context(), userQuery, googleID).Scan(&dbFirstName, &lastName)
+			err := env.DB.QueryRowContext(r.Context(), userQuery, googleID).Scan(&dbFirstName, &lastName)
 			if err != nil {
 				log.Printf("Could not find logged-in user %s for donation, will use PayPal name if available: %v", googleID, err)
 			} else {
@@ -151,45 +203,99 @@ func (env *APIEnv) CaptureDonation(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Insert the main ledger entry
-	var ledgerID int
-	paypalTransactionID := captureResponse.PurchaseUnits[0].Payments.Captures[0].ID
+	var transactionID sql.NullString
+	transactionID.String = captureResponse.PurchaseUnits[0].Payments.Captures[0].ID
+	transactionID.Valid = true
+
 	var description sql.NullString
 	if req.Description != "" {
 		description.String = req.Description
 		description.Valid = true
 	}
-	ledgerQuery := `
-		INSERT INTO ledger (transaction_id, amount, transaction_type, user_google_id, first_name, last_initial, anonymous, description)
-		VALUES ($1, $2, 'deposit', $3, $4, $5, $6, $7)
-		RETURNING id`
-	err = tx.QueryRowContext(r.Context(), ledgerQuery, paypalTransactionID, capturedAmount, userGoogleID, firstName, lastInitial, anonymous, description).Scan(&ledgerID)
+
+	ledgerData := LedgerEntryData{
+		TransactionID:   transactionID,
+		Amount:          capturedAmount,
+		TransactionType: "deposit",
+		UserGoogleID:    userGoogleID,
+		FirstName:       firstName,
+		LastInitial:     lastInitial,
+		Anonymous:       anonymous,
+		Description:     description,
+		Allocations:     req.Allocations,
+	}
+
+	ledgerID, err := env.createLedgerEntries(r.Context(), ledgerData)
 	if err != nil {
-		log.Printf("Failed to insert into ledger: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to record transaction")
-		return
-	}
-
-	// Insert all the individual allocations
-	for _, alloc := range req.Allocations {
-		if alloc.Amount > 0 { // Only insert allocations with a positive amount
-			_, err := tx.ExecContext(r.Context(), "INSERT INTO allocation (ledger_id, funding_pool_id, amount) VALUES ($1, $2, $3)", ledgerID, alloc.FundingPoolID, alloc.Amount)
-			if err != nil {
-				log.Printf("Failed to insert allocation for pool %d: %v", alloc.FundingPoolID, err)
-				respondError(w, http.StatusInternalServerError, "Failed to record transaction allocation")
-				return
-			}
-		}
-	}
-
-	// Commit the transaction if all inserts were successful
-	if err := tx.Commit(); err != nil {
-		log.Printf("Failed to commit transaction: %v", err)
-		respondError(w, http.StatusInternalServerError, "Failed to finalize transaction")
 		return
 	}
 
 	log.Printf("Successfully recorded transaction for PayPal order %s. Ledger ID: %d", req.OrderID, ledgerID)
 
 	respondJSON(w, http.StatusOK, captureResponse)
+}
+
+// CreateExternalDonation handles the manual creation of a donation by a moderator.
+func (env *APIEnv) CreateExternalDonation(w http.ResponseWriter, r *http.Request) {
+	// Step 1: Get Moderator ID from session (middleware already confirmed they are a mod)
+	session, _ := env.SessionStore.Get(r, "pool-party-session")
+	moderatorGoogleID, ok := session.Values["google_id"].(string)
+	if !ok {
+		// This should not happen if middleware is working correctly
+		respondError(w, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+
+	// Step 2: Decode and Validate Request Body
+	var req ExternalDonationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.Description == "" {
+		respondError(w, http.StatusBadRequest, "Description is required")
+		return
+	}
+	if len(req.Allocations) == 0 {
+		respondError(w, http.StatusBadRequest, "At least one allocation is required")
+		return
+	}
+
+	var totalDonation float64
+	for _, alloc := range req.Allocations {
+		if alloc.Amount <= 0 {
+			respondError(w, http.StatusBadRequest, "Donation amounts must be positive")
+			return
+		}
+		totalDonation += alloc.Amount
+	}
+
+	var description sql.NullString
+	description.String = req.Description
+	description.Valid = true
+
+	ledgerData := LedgerEntryData{
+		Amount:          totalDonation,
+		TransactionType: "deposit",
+		UserGoogleID:    sql.NullString{String: moderatorGoogleID, Valid: true},
+		// For external donations, FirstName, LastInitial are NULL, and Anonymous is false.
+		// The frontend will display "External" based on transaction_type and NULL transaction_id.
+		Anonymous:   false,
+		Description: description,
+		Allocations: req.Allocations,
+	}
+
+	ledgerID, err := env.createLedgerEntries(r.Context(), ledgerData)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to record external donation")
+		return
+	}
+
+	log.Printf("Successfully recorded external donation by moderator %s. Ledger ID: %d", moderatorGoogleID, ledgerID)
+	respondJSON(w, http.StatusCreated, map[string]interface{}{
+		"message":  "External donation recorded successfully",
+		"ledgerID": ledgerID,
+	})
 }

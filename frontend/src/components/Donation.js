@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PayPalButtons, usePayPalScriptReducer, FUNDING } from '@paypal/react-paypal-js';
-
-// Material-UI Imports
 import {
   Container,
   Paper,
@@ -16,20 +14,25 @@ import {
   CircularProgress,
   Alert,
 } from '@mui/material';
+import { LoadingButton } from '@mui/lab';
 
-function Donation() {
+function Donation({ user }) {
   const navigate = useNavigate();
   const [{ isPending }] = usePayPalScriptReducer();
-  
+
   // Component State
   const [fundingPools, setFundingPools] = useState([]);
   const [donationAmounts, setDonationAmounts] = useState({});
   const [description, setDescription] = useState('');
   const [isAnonymous, setIsAnonymous] = useState(false);
-  
+
   // Status State
   const [pageLoading, setPageLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [message, setMessage] = useState({ text: '', severity: 'info' });
+
+  // Moderator fields for external donation
+  const [submittingExternal, setSubmittingExternal] = useState(false);
+  const [paypalKey, setPaypalKey] = useState(0);
 
   // Constants
   const MINIMUM_DONATION = 10.00;
@@ -46,7 +49,7 @@ function Donation() {
         setFundingPools(data || []);
       })
       .catch(err => {
-        setError(err.message);
+        setMessage({ text: err.message, severity: 'error' });
       })
       .finally(() => {
         setPageLoading(false);
@@ -62,12 +65,23 @@ function Donation() {
 
   const totalDonation = Object.values(donationAmounts).reduce((sum, amount) => sum + (Number(amount) || 0), 0);
 
+  useEffect(() => {
+    if (message.text) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [message]);
+
+  const handleBlur = () => {
+    // Force the PayPal button to re-render with the latest values
+    setPaypalKey(prev => prev + 1);
+  };
+
   const createOrder = (data, actions) => {
     if (totalDonation < MINIMUM_DONATION) {
-      setError(`The minimum donation amount is $${MINIMUM_DONATION.toFixed(2)}.`);
+      setMessage({ text: `The minimum donation amount is $${MINIMUM_DONATION.toFixed(2)}.`, severity: 'error' });
       return Promise.reject(new Error("Minimum donation amount not met."));
     }
-    setError(null); // Clear previous errors
+    setMessage({ text: '', severity: 'info' }); // Clear previous errors
     return actions.order.create({
       purchase_units: [{
         amount: { value: totalDonation.toFixed(2) },
@@ -86,7 +100,12 @@ function Donation() {
     return fetch('/api/donations/capture', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderID: data.orderID, allocations, description, isAnonymous }),
+      body: JSON.stringify({
+        orderID: data.orderID,
+        allocations: allocations,
+        description: description,
+        isAnonymous: isAnonymous,
+      }),
     })
     .then(res => {
         if (!res.ok) {
@@ -99,8 +118,57 @@ function Donation() {
       navigate('/ledger', { state: { successMessage: `Thank you for your donation, ${donorName}!` } });
     })
     .catch(err => {
-      setError(err.message);
+      setMessage({ text: err.message, severity: 'error' });
     });
+  };
+
+  const handleSubmitExternalDonation = async () => {
+    setMessage({ text: '', severity: 'info' });
+
+    if (totalDonation < MINIMUM_DONATION) {
+      setMessage({ text: `The minimum donation amount is $${MINIMUM_DONATION.toFixed(2)}.`, severity: 'error' });
+      return;
+    }
+    // For external donations, description is required.
+    if (!description.trim()) {
+      setMessage({ text: "Description is required for external donations.", severity: 'error' });
+      return;
+    }
+
+    setSubmittingExternal(true);
+
+    const allocations = Object.entries(donationAmounts)
+      .filter(([, amount]) => Number(amount) > 0)
+      .map(([poolId, amount]) => ({ funding_pool_id: parseInt(poolId, 10), amount: parseFloat(amount) }));
+
+    const payload = {
+      allocations,
+      description: description,
+    };
+
+    try {
+      const response = await fetch('/api/donations/external', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || 'Failed to submit external donation.');
+      }
+
+      setMessage({ text: 'External donation recorded successfully!', severity: 'success' });
+      // Reset form state after successful submission to prevent resubmission
+      // and prepare for the next entry.
+      setDonationAmounts({});
+      setDescription('');
+      setIsAnonymous(false);
+    } catch (err) {
+      setMessage({ text: err.message, severity: 'error' });
+    } finally {
+      setSubmittingExternal(false);
+    }
   };
 
   if (pageLoading) {
@@ -122,11 +190,19 @@ function Donation() {
           Choose how to allocate your donation across the funding pools. The minimum donation is $10.00.
         </Typography>
 
-        {error && <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>}
+        {message.text && (
+          <Alert
+            severity={message.severity}
+            sx={{ mb: 3 }}
+            onClose={() => setMessage({ text: '', severity: 'info' })}
+          >
+            {message.text}
+          </Alert>
+        )}
 
         {fundingPools.length > 0 ? (
           <Box component="form" noValidate autoComplete="off">
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, mb: 2 }}>
               {fundingPools.map(pool => (
                 <TextField
                   key={pool.id}
@@ -134,6 +210,7 @@ function Donation() {
                   type="number"
                   value={donationAmounts[pool.id] || ''}
                   onChange={(e) => handleDonationChange(pool.id, e.target.value)}
+                  onBlur={handleBlur}
                   placeholder="0.00"
                   InputProps={{
                     startAdornment: <InputAdornment position="start">$</InputAdornment>,
@@ -151,7 +228,9 @@ function Donation() {
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="How would you like your donation to be used? (optional)"
+              placeholder={user?.is_moderator 
+                ? "Description (Required for External Donation)" 
+                : "How would you like your donation to be used? (optional)"}
               inputProps={{ maxLength: MAX_DESCRIPTION_LENGTH }}
               helperText={`${description.length}/${MAX_DESCRIPTION_LENGTH}`}
               error={description.length > MAX_DESCRIPTION_LENGTH}
@@ -185,11 +264,27 @@ function Donation() {
                   disabledFunding={[FUNDING.PAYLATER]}
                   createOrder={createOrder}
                   onApprove={onApprove}
-                  onError={(err) => setError(err.message)}
-                  forceReRender={[totalDonation, description, isAnonymous]} // Re-render buttons if these values change
+                  onError={(err) => setMessage({ text: err.message, severity: 'error' })}
+                  forceReRender={[paypalKey]}
                 />
               )}
             </Box>
+
+            {user?.is_moderator && (
+              <>
+                <Divider sx={{ my: 2, fontSize: '0.875rem' }}>OR</Divider>
+                <LoadingButton
+                  fullWidth
+                  onClick={handleSubmitExternalDonation}
+                  variant="contained"
+                  color="secondary"
+                  loading={submittingExternal}
+                  disabled={totalDonation < MINIMUM_DONATION || !description.trim() || isPending}
+                >
+                  Record External Donation
+                </LoadingButton>
+              </>
+            )}
           </Box>
         ) : (
           <Alert severity="info">No funding pools are available for donation at this time.</Alert>
