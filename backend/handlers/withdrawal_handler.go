@@ -12,18 +12,12 @@ import (
 // MakeWithdrawal handles recording a withdrawal transaction in the ledger.
 // This is a moderator-only action.
 func (env *APIEnv) MakeWithdrawal(w http.ResponseWriter, r *http.Request) {
-	// Step 1: Authentication and Authorization
+	// Step 1: Get Moderator ID from session (middleware already confirmed they are a mod)
 	session, _ := env.SessionStore.Get(r, "pool-party-session")
 	googleID, ok := session.Values["google_id"].(string)
-	if !ok || !session.Values["authenticated"].(bool) {
+	if !ok {
+		// This should not happen if middleware is working correctly
 		respondError(w, http.StatusUnauthorized, "Not authenticated")
-		return
-	}
-
-	var isModerator bool
-	err := env.DB.QueryRowContext(r.Context(), "SELECT is_moderator FROM users WHERE google_id = $1", googleID).Scan(&isModerator)
-	if err != nil || !isModerator {
-		respondError(w, http.StatusForbidden, "User is not a moderator")
 		return
 	}
 
@@ -83,10 +77,16 @@ func (env *APIEnv) MakeWithdrawal(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Step 5: Insert Ledger Entry
+	// Step 5: Get moderator user info
 	var userFirstName, userLastName sql.NullString
 	userQuery := `SELECT first_name, last_name FROM users WHERE google_id = $1`
-	tx.QueryRowContext(r.Context(), userQuery, googleID).Scan(&userFirstName, &userLastName)
+	err = tx.QueryRowContext(r.Context(), userQuery, googleID).Scan(&userFirstName, &userLastName)
+	if err != nil {
+		// This is unlikely if middleware passed, but handle it.
+		log.Printf("Failed to get moderator info for google_id %s: %v", googleID, err)
+		respondError(w, http.StatusInternalServerError, "Could not retrieve moderator information")
+		return
+	}
 
 	var lastNameInitial sql.NullString
 	if userLastName.Valid && len(userLastName.String) > 0 {
@@ -94,26 +94,27 @@ func (env *APIEnv) MakeWithdrawal(w http.ResponseWriter, r *http.Request) {
 		lastNameInitial.Valid = true
 	}
 
-	var ledgerID int
-	ledgerQuery := `
-		INSERT INTO ledger (amount, transaction_type, user_google_id, first_name, last_initial, description, anonymous)
-		VALUES ($1, 'withdrawal', $2, $3, $4, $5, false)
-		RETURNING id`
-	err = tx.QueryRowContext(r.Context(), ledgerQuery, totalWithdrawal, googleID, userFirstName, lastNameInitial, req.Description).Scan(&ledgerID)
+	// Step 6: Prepare data and create ledger entries
+	var description sql.NullString
+	description.String = req.Description
+	description.Valid = true
+
+	ledgerData := LedgerEntryData{
+		Amount:          totalWithdrawal,
+		TransactionType: "withdrawal",
+		UserGoogleID:    sql.NullString{String: googleID, Valid: true},
+		FirstName:       userFirstName,
+		LastInitial:     lastNameInitial,
+		Anonymous:       false,
+		Description:     description,
+		Allocations:     req.Allocations,
+	}
+
+	ledgerID, err := env.CreateLedgerEntriesInTx(r.Context(), tx, ledgerData)
 	if err != nil {
 		log.Printf("Failed to insert withdrawal into ledger: %v", err)
 		respondError(w, http.StatusInternalServerError, "Failed to record withdrawal")
 		return
-	}
-
-	// Step 6: Insert Allocations
-	for _, alloc := range req.Allocations {
-		_, err := tx.ExecContext(r.Context(), "INSERT INTO allocation (ledger_id, funding_pool_id, amount) VALUES ($1, $2, $3)", ledgerID, alloc.FundingPoolID, alloc.Amount)
-		if err != nil {
-			log.Printf("Failed to insert withdrawal allocation for pool %d: %v", alloc.FundingPoolID, err)
-			respondError(w, http.StatusInternalServerError, "Failed to record withdrawal allocation")
-			return
-		}
 	}
 
 	// Step 7: Commit Transaction

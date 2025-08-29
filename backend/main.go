@@ -103,6 +103,7 @@ func main() {
 
 	// Define the Donation routes
 	apiRouter.HandleFunc("/donations/capture", env.CaptureDonation).Methods(http.MethodPost)
+	apiRouter.HandleFunc("/donations/external", env.ModeratorRequired(env.CreateExternalDonation)).Methods(http.MethodPost)
 
 	// Define the Withdrawal routes
 	apiRouter.HandleFunc("/withdrawals", env.ModeratorRequired(env.MakeWithdrawal)).Methods(http.MethodPost)

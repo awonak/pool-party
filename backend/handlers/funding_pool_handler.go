@@ -153,20 +153,6 @@ func (env *APIEnv) GetFundingPool(w http.ResponseWriter, r *http.Request) {
 
 // CreateFundingPool handles the creation of a new funding pool.
 func (env *APIEnv) CreateFundingPool(w http.ResponseWriter, r *http.Request) {
-	// Authorization check
-	session, _ := env.SessionStore.Get(r, "pool-party-session")
-	googleID, ok := session.Values["google_id"].(string)
-	if !ok || !session.Values["authenticated"].(bool) {
-		respondError(w, http.StatusUnauthorized, "Not authenticated")
-		return
-	}
-	var isModerator bool
-	err := env.DB.QueryRowContext(r.Context(), "SELECT is_moderator FROM users WHERE google_id = $1", googleID).Scan(&isModerator)
-	if err != nil || !isModerator {
-		respondError(w, http.StatusForbidden, "User is not a moderator")
-		return
-	}
-
 	req, err := decodeAndValidateFundingPoolRequest(r)
 	if err != nil {
 		if reqErr, ok := err.(*models.RequestError); ok {
@@ -202,20 +188,6 @@ func (env *APIEnv) CreateFundingPool(w http.ResponseWriter, r *http.Request) {
 
 // UpdateFundingPool handles updates to an existing funding pool.
 func (env *APIEnv) UpdateFundingPool(w http.ResponseWriter, r *http.Request) {
-	// Authorization check
-	session, _ := env.SessionStore.Get(r, "pool-party-session")
-	googleID, ok := session.Values["google_id"].(string)
-	if !ok || !session.Values["authenticated"].(bool) {
-		respondError(w, http.StatusUnauthorized, "Not authenticated")
-		return
-	}
-	var isModerator bool
-	err := env.DB.QueryRowContext(r.Context(), "SELECT is_moderator FROM users WHERE google_id = $1", googleID).Scan(&isModerator)
-	if err != nil || !isModerator {
-		respondError(w, http.StatusForbidden, "User is not a moderator")
-		return
-	}
-
 	id, err := getIDFromRequest(r)
 	if err != nil {
 		if reqErr, ok := err.(*models.RequestError); ok {
@@ -268,20 +240,6 @@ func (env *APIEnv) UpdateFundingPool(w http.ResponseWriter, r *http.Request) {
 
 // DeleteFundingPool handles the deletion of a funding pool.
 func (env *APIEnv) DeleteFundingPool(w http.ResponseWriter, r *http.Request) {
-	// Authorization check
-	session, _ := env.SessionStore.Get(r, "pool-party-session")
-	googleID, ok := session.Values["google_id"].(string)
-	if !ok || !session.Values["authenticated"].(bool) {
-		respondError(w, http.StatusUnauthorized, "Not authenticated")
-		return
-	}
-	var isModerator bool
-	err := env.DB.QueryRowContext(r.Context(), "SELECT is_moderator FROM users WHERE google_id = $1", googleID).Scan(&isModerator)
-	if err != nil || !isModerator {
-		respondError(w, http.StatusForbidden, "User is not a moderator")
-		return
-	}
-
 	id, err := getIDFromRequest(r)
 	if err != nil {
 		if reqErr, ok := err.(*models.RequestError); ok {
