@@ -32,6 +32,7 @@ function Donation({ user }) {
 
   // Moderator fields for external donation
   const [submittingExternal, setSubmittingExternal] = useState(false);
+  const [paypalKey, setPaypalKey] = useState(0);
 
   // Constants
   const MINIMUM_DONATION = 10.00;
@@ -63,11 +64,17 @@ function Donation({ user }) {
   };
 
   const totalDonation = Object.values(donationAmounts).reduce((sum, amount) => sum + (Number(amount) || 0), 0);
+
   useEffect(() => {
     if (message.text) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [message]);
+
+  const handleBlur = () => {
+    // Force the PayPal button to re-render with the latest values
+    setPaypalKey(prev => prev + 1);
+  };
 
   const createOrder = (data, actions) => {
     if (totalDonation < MINIMUM_DONATION) {
@@ -93,7 +100,12 @@ function Donation({ user }) {
     return fetch('/api/donations/capture', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ orderID: data.orderID, allocations, description, isAnonymous }),
+      body: JSON.stringify({
+        orderID: data.orderID,
+        allocations: allocations,
+        description: description,
+        isAnonymous: isAnonymous,
+      }),
     })
     .then(res => {
         if (!res.ok) {
@@ -198,6 +210,7 @@ function Donation({ user }) {
                   type="number"
                   value={donationAmounts[pool.id] || ''}
                   onChange={(e) => handleDonationChange(pool.id, e.target.value)}
+                  onBlur={handleBlur}
                   placeholder="0.00"
                   InputProps={{
                     startAdornment: <InputAdornment position="start">$</InputAdornment>,
@@ -252,7 +265,7 @@ function Donation({ user }) {
                   createOrder={createOrder}
                   onApprove={onApprove}
                   onError={(err) => setMessage({ text: err.message, severity: 'error' })}
-                  forceReRender={[totalDonation, description, isAnonymous]} // Re-render buttons if these values change
+                  forceReRender={[paypalKey]}
                 />
               )}
             </Box>
