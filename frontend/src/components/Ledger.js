@@ -55,8 +55,13 @@ function Ledger() {
   
   const formatUser = (transaction) => {
     if (transaction.anonymous) return 'Anonymous';
+    // External donations are deposits with no PayPal transaction ID
+    if (transaction.transaction_type === 'deposit' && !transaction.transaction_id) {
+      return 'External';
+    }
     if (transaction.first_name && transaction.last_initial) return `${transaction.first_name} ${transaction.last_initial}.`;
     if (transaction.first_name) return transaction.first_name;
+    // This will now primarily be for withdrawals by moderators
     return 'User';
   };
 
